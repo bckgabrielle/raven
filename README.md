@@ -37,3 +37,5 @@ Pipeline:
 
 10. Quality data returns to the team
     Errors, unsupported phrases, and Deaf ASL reviewer feedback improve the dataset and model.
+
+reminder to add license
