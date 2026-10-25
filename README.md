@@ -11,10 +11,10 @@ Pipeline:
 3. Backend prepares the text
    It cleans and standardizes the text, then sends it to the AI model.
 
-4. AI model translates English into ASL
-   It determines ASL word order, signs, facial grammar, timing, fingerspelling, and body language.
+4. AI model translates English into ASL (future goal)
+   The current model backbone recognizes isolated signs from video and can look up exact gloss reference clips. It does not translate English sentences or generate signing motion.
 
-5. AI model creates motion instructions
+5. A future translation/retargeting model creates motion instructions
    It outputs a structured sign-performance file containing:
    - Arm and upper-body movement
    - Wrist and palm orientation
