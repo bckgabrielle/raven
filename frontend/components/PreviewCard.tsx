@@ -1,13 +1,13 @@
 "use client";
 
-import { CircleAlert, Flag, Pause, Play, RotateCcw } from "lucide-react";
+import { useRef } from "react";
+import { CircleAlert, Flag, RotateCcw } from "lucide-react";
 import ProcessingSteps from "./ProcessingSteps";
-import { SPEEDS, formatTime, useAvatarPlayback } from "@/lib/useAvatarPlayback";
 import type { Stage, TranslationResult } from "@/lib/types";
 
 interface Props {
   stage: Stage;
-  step: number;
+  requestKind: "reference" | "recognition";
   result: TranslationResult | null;
   error: string;
   reportOpen: boolean;
@@ -17,65 +17,27 @@ interface Props {
   onReport: (timeSec: number) => void;
 }
 
-function AvatarStage({ playing, time, name }: { playing: boolean; time: number; name?: string }) {
-  const letters = name ? name.toUpperCase().split("") : [];
-  const active = playing ? Math.floor(time * 2) % Math.max(letters.length, 1) : -1;
-  return (
-    <div
-      role="img"
-      aria-label="Sign language avatar placeholder"
-      className="relative grid aspect-video place-items-center overflow-hidden rounded-xl bg-[var(--navy)]"
-    >
-      <span className="chip absolute left-3 top-3 bg-[var(--accent)] text-[var(--navy)]">
-        AI avatar · Demo animation
-      </span>
-      <div className="text-center text-white">
-        <span className={`inline-block text-6xl ${playing ? "wave" : ""}`} aria-hidden>
-          🤟
-        </span>
-        <p className="mt-2 text-sm font-medium">{playing ? "Signing…" : "Avatar placeholder"}</p>
-        <p className="text-xs text-white/80">The model’s motion output will render here.</p>
-      </div>
-      {letters.length > 0 && (
-        <div className="absolute bottom-2 left-0 right-0 flex items-center justify-center gap-1.5">
-          <span className="mr-1 text-xs text-white/80">Fingerspelling</span>
-          {letters.map((letter, i) => (
-            <span
-              key={i}
-              className={`grid h-7 w-7 place-items-center rounded-md text-sm font-bold ${
-                i === active ? "bg-[var(--accent)] text-[var(--navy)]" : "bg-white/15 text-white"
-              }`}
-            >
-              {letter}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function PreviewCard(p: Props) {
-  const duration = p.result?.durationSec ?? 0;
-  const pb = useAvatarPlayback(duration, p.result, p.stage === "ready" && !p.reportOpen);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const chip =
     p.stage === "processing" ? (
       <span className="chip chip-brand">In progress</span>
     ) : p.stage === "ready" ? (
-      <span className="chip chip-ok">{pb.playing ? "Playing" : "Ready"}</span>
+      p.result?.kind === "reference" && !p.result.supported ? (
+        <span className="chip chip-warn">No exact match</span>
+      ) : (
+        <span className="chip chip-ok">Result ready</span>
+      )
     ) : p.stage === "error" ? (
       <span className="chip chip-warn">Needs attention</span>
     ) : null;
-
-  const names = p.result?.fingerspelled ?? [];
-  const unsupported = p.result?.unsupported ?? [];
 
   return (
     <section className="card" aria-labelledby="preview-title">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 id="preview-title" className="text-lg font-semibold">
-          Your ASL preview
+          Model result
         </h2>
         {chip}
       </div>
@@ -85,18 +47,18 @@ export default function PreviewCard(p: Props) {
           <span className="text-4xl" aria-hidden>
             🤟
           </span>
-          <p className="mt-3 font-medium">Your ASL preview will appear here</p>
+          <p className="mt-3 font-medium">Your result will appear here</p>
           <p className="muted mt-1 max-w-xs text-sm">
-            Add English on the left, then choose Translate to ASL.
+            Look up one gloss or upload a video of one isolated sign.
           </p>
         </div>
       )}
 
       {p.stage === "processing" && (
         <>
-          <ProcessingSteps step={p.step} />
+          <ProcessingSteps recognition={p.requestKind === "recognition"} />
           <div className="mt-4 flex items-center justify-between gap-3">
-            <p className="muted text-sm">Your English text is kept if you cancel.</p>
+            <p className="muted text-sm">Cancel to stop the current request.</p>
             <button type="button" className="btn btn-ghost" onClick={p.onCancel}>
               Cancel
             </button>
@@ -108,8 +70,8 @@ export default function PreviewCard(p: Props) {
         <div role="alert" className="alert alert-danger flex items-start gap-3 p-4">
           <CircleAlert size={20} className="mt-0.5 shrink-0" aria-hidden />
           <div>
-            <p className="font-semibold">We couldn’t create this animation.</p>
-            <p className="mt-1">{p.error} Your English text is still saved, so you can try again.</p>
+            <p className="font-semibold">The model request failed.</p>
+            <p className="mt-1">{p.error}</p>
             <button type="button" className="btn btn-ghost mt-3" onClick={p.onRetry}>
               <RotateCcw size={16} aria-hidden /> Try again
             </button>
@@ -119,80 +81,96 @@ export default function PreviewCard(p: Props) {
 
       {p.stage === "ready" && p.result && (
         <>
-          <AvatarStage playing={pb.playing} time={pb.time} name={names[0]} />
-
-          <div className="mt-4">
-            <input
-              type="range"
-              className="range"
-              min={0}
-              max={duration}
-              step={0.1}
-              value={pb.time}
-              aria-label="Playback position"
-              aria-valuetext={`${formatTime(pb.time)} of ${formatTime(duration)}`}
-              onChange={(e) => pb.seek(Number(e.target.value))}
-            />
-            <div className="muted flex justify-between text-xs">
-              <span>{formatTime(pb.time)}</span>
-              <span>{formatTime(duration)}</span>
+          {p.result.kind === "reference" ? (
+            p.result.supported && p.result.sequence[0] ? (
+              <div>
+                <p className="mb-2 font-semibold">
+                  {p.result.sequence[0].gloss}
+                  <span className="muted ml-2 text-sm font-normal">
+                    ASL-LEX {p.result.sequence[0].aslLexCode}
+                  </span>
+                </p>
+                <video
+                  key={p.result.sequence[0].videoId}
+                  ref={videoRef}
+                  className="w-full rounded-xl bg-[var(--navy)]"
+                  src={p.result.sequence[0].videoUrl}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  aria-label={`Recorded reference sign for ${p.result.sequence[0].gloss}`}
+                >
+                  Your browser does not support video playback.
+                </video>
+                <p className="muted mt-2 text-xs">
+                  Recorded ASL-Citizen example · Participant ID is not shown.
+                </p>
+              </div>
+            ) : (
+              <div className="alert alert-warn">
+                <p className="font-semibold">No exact gloss reference found.</p>
+                <p className="mt-1">
+                  Search one dataset gloss at a time. This lookup does not translate English sentences.
+                </p>
+              </div>
+            )
+          ) : (
+            <div>
+              <h3 className="font-semibold">Top isolated-sign predictions</h3>
+              {p.result.predictions.length > 0 ? (
+                <ol className="mt-3 space-y-2">
+                  {p.result.predictions.map((prediction, index) => (
+                    <li
+                      key={`${prediction.gloss}-${index}`}
+                      className="flex items-center justify-between rounded-lg bg-[#f3f7fe] px-3 py-2"
+                    >
+                      <span className="font-medium">
+                        {index + 1}. {prediction.gloss}
+                      </span>
+                      <span className="muted text-sm">
+                        {(prediction.confidence * 100).toFixed(1)}% model score
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="alert alert-warn mt-3">The model returned no sign predictions.</p>
+              )}
+              <p className="muted mt-2 text-xs">
+                Scores are not calibrated probabilities. The model predicts one isolated sign, not a phrase.
+              </p>
             </div>
-          </div>
+          )}
 
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <button type="button" className="btn btn-primary" onClick={pb.toggle}>
-              {pb.playing ? <Pause size={16} aria-hidden /> : <Play size={16} aria-hidden />}
-              {pb.playing ? "Pause" : "Play"}
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={pb.replay}>
-              <RotateCcw size={16} aria-hidden /> Replay
-            </button>
-            <label className="muted ml-auto flex items-center gap-2 text-sm">
-              Speed
-              <select
-                className="field py-2"
-                value={pb.speed}
-                onChange={(e) => pb.setSpeed(Number(e.target.value))}
-              >
-                {SPEEDS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}×
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <p className="muted mt-2 text-xs">Press Space to play or pause.</p>
+          <p className="alert alert-brand mt-4">{p.result.warning}</p>
 
           <div className="mt-4 rounded-xl border border-[var(--line)] p-3 md:hidden">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold">Your English</span>
+              <span className="text-xs font-semibold">
+                {p.result.kind === "recognition" ? "Uploaded video" : "Gloss lookup"}
+              </span>
               <button type="button" className="btn-link text-xs" onClick={p.onEdit}>
-                Edit text
+                Try another
               </button>
             </div>
-            <p className="muted mt-1 text-sm">{p.result.text}</p>
+            <p className="muted mt-1 break-words text-sm">{p.result.text}</p>
           </div>
 
           <div className="divider mt-4 pt-4 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="chip chip-warn">Not human-reviewed</span>
-              <span className="muted text-xs">{p.result.modelVersion} · Saved result</span>
+              <span className="muted text-xs">{p.result.modelVersion}</span>
             </div>
-            {names.length > 0 && (
-              <p className="muted mt-2">
-                {names.map((n) => `“${n}”`).join(", ")} {names.length === 1 ? "is" : "are"} marked for
-                fingerspelling. Names, timing, and facial expression may need review.
-              </p>
-            )}
-            {unsupported.length > 0 && (
-              <p className="alert alert-warn mt-2">
-                These phrases may not be supported yet: {unsupported.join(", ")}.
-              </p>
-            )}
             <div className="mt-3 flex items-center justify-between gap-3">
               <span className="muted">Something look off?</span>
-              <button type="button" className="btn-link" onClick={() => p.onReport(pb.time)}>
+              <button
+                type="button"
+                className="btn-link"
+                onClick={() => {
+                  videoRef.current?.pause();
+                  p.onReport(videoRef.current?.currentTime ?? 0);
+                }}
+              >
                 <Flag size={14} aria-hidden /> Report an issue
               </button>
             </div>

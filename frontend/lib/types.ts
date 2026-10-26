@@ -7,20 +7,42 @@ export type IssueCategory =
   | "unsupported"
   | "playback";
 
-// Shape the back end should return from POST /api/translate.
-// Confirm the final contract with Mitchelle and Hadassah.
-export interface TranslationResult {
-  text: string;
-  durationSec: number;
-  modelVersion: string;
-  fingerspelled: string[];
-  unsupported: string[];
+export interface SignReference {
+  gloss: string;
+  aslLexCode: string;
+  videoId: string;
+  videoUrl: string;
 }
+
+export interface ReferenceResult {
+  kind: "reference";
+  status: "reference_only" | "unsupported";
+  supported: boolean;
+  text: string;
+  modelVersion: string;
+  warning: string;
+  sequence: SignReference[];
+}
+
+export interface SignPrediction {
+  gloss: string;
+  confidence: number;
+}
+
+export interface RecognitionResult {
+  kind: "recognition";
+  text: string;
+  modelVersion: string;
+  warning: string;
+  predictions: SignPrediction[];
+}
+
+export type TranslationResult = ReferenceResult | RecognitionResult;
 
 export interface FeedbackReport {
   category: IssueCategory;
   details: string;
   playbackTimeSec: number;
   modelVersion: string;
-  englishText?: string; // only sent when the user ticks "include my text"
+  englishText?: string;
 }

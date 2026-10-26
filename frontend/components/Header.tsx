@@ -17,7 +17,7 @@ export default function Header() {
             ))}
           </span>
           <span className="hidden border-l border-white/30 pl-3 text-sm text-white/80 md:inline">
-            English to ASL studio
+            ASL sign model
           </span>
         </div>
         <nav aria-label="Main" className="flex items-center gap-5 text-sm">
@@ -26,7 +26,7 @@ export default function Header() {
             aria-current="page"
             className="hidden border-b-2 border-[var(--accent)] pb-0.5 font-medium sm:inline-block"
           >
-            Translate
+            Explore signs
           </a>
           <a href="#about" className="hidden text-white/80 hover:underline sm:inline">
             About Raven

@@ -7,8 +7,8 @@ import "./raven.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Raven · English to ASL studio",
-  description: "Explore English as an AI-generated ASL animation. Research prototype.",
+  title: "Raven · ASL sign model",
+  description: "Explore isolated-sign recognition and recorded ASL sign references. Research prototype.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
