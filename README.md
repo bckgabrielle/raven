@@ -1,6 +1,6 @@
 # raven
 
-Pipeline:
+## Intended product pipeline
 
 1. User gives input
    Typed text, pasted text, uploaded transcript, or later speech/audio.
@@ -8,7 +8,7 @@ Pipeline:
 2. Frontend sends it to the backend
    The app validates the input and creates a signing request.
 
-3. Backend prepares the text
+3. Backend prepares and queues the text
    It cleans and standardizes the text, then sends it to the AI model.
 
 4. AI model translates English into ASL (future goal)
@@ -24,7 +24,7 @@ Pipeline:
    - Timing for the complete phrase
 
 6. Backend saves the result
-   It stores the motion result, model version, source text, and request status.
+   The target is to store the motion result, model version, source text, and request status.
 
 7. Frontend receives the completed result
    It shows the user that the signing performance is ready.
@@ -38,4 +38,11 @@ Pipeline:
 10. Quality data returns to the team
     Errors, unsupported phrases, and Deaf ASL reviewer feedback improve the dataset and model.
 
-reminder to add license
+## Current backend
+
+The backend currently supports durable local signing-request status/results,
+an SQLite-backed queue worker, exact single-gloss reference lookup, isolated
+video-sign recognition, feedback intake, and authenticated local dataset
+intake/review with consent/licence metadata and hashed manifests. It does not
+yet translate English sentences, generate motion, or run landmark ETL. See
+[backend/README.md](./backend/README.md) for setup, API routes, and limitations.

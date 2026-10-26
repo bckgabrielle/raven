@@ -5,6 +5,7 @@ __pycache__/
 artifacts/
 *.pt
 *.pth
+backend/.raven-state/
 
 # C extensions
 *.so
