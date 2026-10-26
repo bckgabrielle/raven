@@ -17,7 +17,7 @@ export default function Header() {
             ))}
           </span>
           <span className="hidden border-l border-white/30 pl-3 text-sm text-white/80 md:inline">
-            ASL sign model
+            ASL gloss studio
           </span>
         </div>
         <nav aria-label="Main" className="flex items-center gap-5 text-sm">

@@ -1,7 +1,8 @@
 export const MAX_CHARS = 500;
 export const MAX_FILE_BYTES = 1024 * 1024; // 1 MB
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
-export const EXAMPLE_TEXT = "APPLE";
+export const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+export const EXAMPLE_TEXT = "Hello, my name is Maya. I am learning ASL.";
 
 export interface TextStatus {
   ok: boolean;
@@ -12,7 +13,7 @@ export interface TextStatus {
 export function checkText(text: string): TextStatus {
   const trimmed = text.trim();
   if (!trimmed) {
-    return { ok: false, tone: "idle", message: "Enter one ASL gloss to search." };
+    return { ok: false, tone: "idle", message: "Enter English text to create a gloss draft." };
   }
   if (text.length > MAX_CHARS) {
     return {
@@ -24,7 +25,7 @@ export function checkText(text: string): TextStatus {
   return {
     ok: true,
     tone: "ok",
-    message: "Ready to find an exact gloss match.",
+    message: "Ready to request an unreviewed ASL gloss draft.",
   };
 }
 
@@ -56,6 +57,20 @@ export function checkVideoFile(file: File): string | null {
   }
   if (file.size === 0) {
     return "This video is empty. Choose another file.";
+  }
+  return null;
+}
+
+export function checkAudioFile(file: File): string | null {
+  const allowed = /\.(flac|mp3|mp4|m4a|mpeg|mpga|ogg|opus|wav|webm)$/i.test(file.name);
+  if (!allowed) {
+    return "Use WAV, MP3, M4A, OGG, FLAC, MP4, or WebM audio.";
+  }
+  if (file.size > MAX_AUDIO_BYTES) {
+    return "Audio uploads are limited to 25 MB.";
+  }
+  if (file.size === 0) {
+    return "This audio file is empty. Choose another recording.";
   }
   return null;
 }

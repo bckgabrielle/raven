@@ -1,7 +1,7 @@
 import type {
   FeedbackReport,
   RecognitionResult,
-  ReferenceResult,
+  TranslationDraft,
   TranslationResult,
 } from "./types";
 
@@ -13,20 +13,33 @@ function isTranslationResult(value: unknown): value is TranslationResult {
   if (!isRecord(value) || typeof value.text !== "string" || typeof value.modelVersion !== "string") {
     return false;
   }
-  if (value.kind === "reference") {
+  if (value.kind === "translation") {
     return (
-      (value.status === "reference_only" || value.status === "unsupported") &&
-      typeof value.supported === "boolean" &&
-      typeof value.warning === "string" &&
+      value.status === "draft" &&
+      (value.translationSource === "groq_unreviewed" ||
+        value.translationSource === "local_word_lookup") &&
+      value.reviewStatus === "unreviewed" &&
+      typeof value.modelVersion === "string" &&
+      Array.isArray(value.glosses) &&
+      value.glosses.every((gloss) => typeof gloss === "string") &&
       Array.isArray(value.sequence) &&
       value.sequence.every(
         (entry) =>
           isRecord(entry) &&
           typeof entry.gloss === "string" &&
-          typeof entry.aslLexCode === "string" &&
-          typeof entry.videoId === "string" &&
-          typeof entry.videoUrl === "string",
-      )
+          typeof entry.supported === "boolean" &&
+          (entry.poseUrl === null || typeof entry.poseUrl === "string") &&
+          (entry.reference === null ||
+            (isRecord(entry.reference) &&
+              typeof entry.reference.gloss === "string" &&
+              typeof entry.reference.aslLexCode === "string" &&
+              typeof entry.reference.videoId === "string" &&
+              typeof entry.reference.videoUrl === "string")),
+      ) &&
+      Array.isArray(value.unsupportedGlosses) &&
+      value.unsupportedGlosses.every((gloss) => typeof gloss === "string") &&
+      Array.isArray(value.warnings) &&
+      value.warnings.every((warning) => typeof warning === "string")
     );
   }
   return (
@@ -65,21 +78,51 @@ async function readResult(response: Response, failureMessage: string): Promise<T
   return payload;
 }
 
-export async function lookupSignReference(
+export async function translateText(
   text: string,
   signal: AbortSignal,
-): Promise<ReferenceResult> {
+): Promise<TranslationDraft> {
   const response = await fetch("/api/translate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
     signal,
   });
-  const result = await readResult(response, "The sign lookup couldn’t be completed.");
-  if (result.kind !== "reference") {
+  const result = await readResult(response, "The gloss draft couldn’t be generated.");
+  if (result.kind !== "translation") {
     throw new Error("The model service returned the wrong result type.");
   }
   return result;
+}
+
+export async function transcribeAudio(
+  file: File,
+  signal: AbortSignal,
+): Promise<string> {
+  const body = new FormData();
+  body.append("audio", file);
+  const response = await fetch("/api/transcribe", {
+    method: "POST",
+    body,
+    signal,
+  });
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error("The transcription service returned invalid data.");
+  }
+  if (!response.ok) {
+    const message =
+      isRecord(payload) && typeof payload.error === "string"
+        ? payload.error
+        : "The audio could not be transcribed.";
+    throw new Error(message);
+  }
+  if (!isRecord(payload) || typeof payload.text !== "string" || !payload.text.trim()) {
+    throw new Error("The transcription service returned an empty transcript.");
+  }
+  return payload.text.trim();
 }
 
 export async function recognizeSignVideo(

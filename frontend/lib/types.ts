@@ -14,14 +14,24 @@ export interface SignReference {
   videoUrl: string;
 }
 
-export interface ReferenceResult {
-  kind: "reference";
-  status: "reference_only" | "unsupported";
+export interface DraftSequenceItem {
+  gloss: string;
   supported: boolean;
+  reference: SignReference | null;
+  poseUrl: string | null;
+}
+
+export interface TranslationDraft {
+  kind: "translation";
+  status: "draft";
   text: string;
+  translationSource: "groq_unreviewed" | "local_word_lookup";
+  reviewStatus: "unreviewed";
   modelVersion: string;
-  warning: string;
-  sequence: SignReference[];
+  glosses: string[];
+  sequence: DraftSequenceItem[];
+  unsupportedGlosses: string[];
+  warnings: string[];
 }
 
 export interface SignPrediction {
@@ -37,7 +47,7 @@ export interface RecognitionResult {
   predictions: SignPrediction[];
 }
 
-export type TranslationResult = ReferenceResult | RecognitionResult;
+export type TranslationResult = TranslationDraft | RecognitionResult;
 
 export interface FeedbackReport {
   category: IssueCategory;

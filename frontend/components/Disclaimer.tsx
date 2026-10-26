@@ -6,9 +6,10 @@ export default function Disclaimer() {
       <Info size={18} className="brand-text mt-0.5 shrink-0" aria-hidden />
       <p className="muted">
         <strong className="text-[var(--ink)]">A research prototype, not an interpreter.</strong>{" "}
-        The model recognizes isolated signs and can show recorded examples for exact glosses. It
-        does not translate English sentences or generate avatar motion. Predictions may be wrong;
-        do not use for critical communication.
+        Groq drafts and transcriptions may be wrong and have not been reviewed by Deaf ASL experts.
+        Avatar playback reuses isolated sign pose tracks and experimental rig demos; it does not
+        provide validated sentence grammar or facial/non-manual signing. Do not use for critical
+        communication.
       </p>
     </aside>
   );

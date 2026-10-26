@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { lookupSignReference, recognizeSignVideo } from "@/lib/api";
+import { recognizeSignVideo, transcribeAudio, translateText } from "@/lib/api";
 import type { MobileTab, Stage, TranslationResult } from "@/lib/types";
 import Disclaimer from "./Disclaimer";
 import InputCard from "./InputCard";
@@ -9,13 +9,15 @@ import PreviewCard from "./PreviewCard";
 import ReportModal from "./ReportModal";
 
 type Request =
-  | { kind: "reference"; text: string }
+  | { kind: "translation"; text: string }
+  | { kind: "transcription"; file: File }
   | { kind: "recognition"; file: File };
 
 export default function TranslatorApp() {
   const [text, setText] = useState("");
+  const [transcriptNotice, setTranscriptNotice] = useState("");
   const [stage, setStage] = useState<Stage>("idle");
-  const [requestKind, setRequestKind] = useState<Request["kind"]>("reference");
+  const [requestKind, setRequestKind] = useState<Request["kind"]>("translation");
   const [result, setResult] = useState<TranslationResult | null>(null);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<MobileTab>("input");
@@ -43,11 +45,21 @@ export default function TranslatorApp() {
     setTab("preview");
 
     try {
+      if (request.kind === "transcription") {
+        const transcript = await transcribeAudio(request.file, controller.signal);
+        if (controller.signal.aborted) return;
+        setText(transcript);
+        setTranscriptNotice("Transcript ready. Review and edit it before drafting ASL glosses.");
+        setStage("idle");
+        setTab("input");
+        return;
+      }
       const output =
-        request.kind === "reference"
-          ? await lookupSignReference(request.text, controller.signal)
+        request.kind === "translation"
+          ? await translateText(request.text, controller.signal)
           : await recognizeSignVideo(request.file, controller.signal);
       if (controller.signal.aborted) return;
+      setTranscriptNotice("");
       setResult(output);
       setStage("ready");
     } catch (err) {
@@ -59,8 +71,12 @@ export default function TranslatorApp() {
     }
   }
 
-  function lookup() {
-    void execute({ kind: "reference", text: text.trim() });
+  function translate() {
+    void execute({ kind: "translation", text: text.trim() });
+  }
+
+  function transcribe(file: File) {
+    void execute({ kind: "transcription", file });
   }
 
   function recognize(file: File) {
@@ -88,16 +104,16 @@ export default function TranslatorApp() {
     <main id="top" className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-7 md:py-8">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Explore ASL signs with Raven.</h1>
+          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">From speech to ASL gloss drafts.</h1>
           <p className="muted mt-2">
-            Look up one gloss or ask the model to recognize an isolated sign video.
+            Transcribe, draft a gloss sequence, inspect references, and preview the Raven rig.
           </p>
         </div>
         <div
           className="hidden items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm font-medium md:flex"
-          aria-label="ASL sign model"
+          aria-label="ASL gloss draft pipeline"
         >
-          <span className="brand-text">ASL sign model</span>
+          <span className="brand-text">ASL draft · human review required</span>
         </div>
       </div>
 
@@ -116,8 +132,10 @@ export default function TranslatorApp() {
             text={text}
             onTextChange={setText}
             busy={stage === "processing"}
-            onLookup={lookup}
+            onTranslate={translate}
+            onTranscribe={transcribe}
             onRecognize={recognize}
+            transcriptNotice={transcriptNotice}
           />
         </div>
         <div className={tab === "preview" ? "" : "hidden md:block"}>
