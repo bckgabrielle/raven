@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, patch
 import torch
 
 from asl_backbone import api, groq_service
+from asl_backbone.alphabet_dataset import load_alphabet_samples
 from asl_backbone.catalog import SignCatalog
 from asl_backbone.data import normalize_gloss, read_split
 from asl_backbone.model import TemporalSignClassifier
@@ -26,6 +27,40 @@ from asl_backbone.pose_tracks import (
 
 
 class DatasetTests(unittest.TestCase):
+    def test_loads_alphabet_image_folders_and_ignores_nested_or_unknown_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "download" / "ASL_Data"
+            letter_a = root / "A-samples"
+            letter_a.mkdir(parents=True)
+            (letter_a / "10.jpg").write_bytes(b"image")
+            (letter_a / "2.jpg").write_bytes(b"image")
+            (letter_a / "notes.txt").write_text("not an image", encoding="utf-8")
+            (letter_a / "nested").mkdir()
+            (letter_a / "nested" / "3.jpg").write_bytes(b"image")
+            (root / "unrelated").mkdir()
+
+            samples = load_alphabet_samples(root.parent)
+
+        self.assertEqual([path.name for path in samples["A"]], ["2.jpg", "10.jpg"])
+
+    def test_alphabet_api_lists_and_serves_only_loaded_samples(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            sample_path = Path(directory) / "A-samples" / "0.jpg"
+            sample_path.parent.mkdir()
+            sample_path.write_bytes(b"image")
+            samples = {"A": [sample_path]}
+
+            with patch.object(api.runtime, "alphabet_samples", samples):
+                listing = api.get_alphabet_dataset()
+                image = api.get_alphabet_sample("a", 0)
+                with self.assertRaises(api.HTTPException) as missing:
+                    api.get_alphabet_sample("B", 0)
+
+        self.assertEqual(listing["letters"], [{"letter": "A", "sample_count": 1}])
+        self.assertEqual(Path(image.path), sample_path)
+        self.assertEqual(image.media_type, "image/jpeg")
+        self.assertEqual(missing.exception.status_code, 404)
+
     def test_reads_dataset_csv_and_preserves_gloss_labels(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "train.csv"

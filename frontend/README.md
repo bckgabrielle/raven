@@ -1,13 +1,14 @@
 # Raven frontend
 
-The Next.js frontend proxies requests to the local FastAPI backend, keeping backend credentials out of the browser. The prototype supports:
+Raven is presented as an ASL-learning prototype. The Next.js frontend proxies requests to the local FastAPI backend, keeping backend credentials out of the browser. The app supports:
 
+- Optional ASL alphabet practice using local image samples from the [American Sign Language Dataset on Kaggle](https://www.kaggle.com/datasets/chaitanyakakade77/american-sign-language-dataset). Raven does not download the dataset on startup; see the repository README for setup.
 - English text entry or `.txt` upload, followed by an unreviewed Groq-generated ASL gloss draft when configured.
 - Microphone recording or audio upload, transcribed by Groq and returned as editable text.
 - Local gloss/reference matching and isolated-sign video recognition when the backend is configured with the dataset and trained checkpoint.
 - Previews of the exported Raven Jack and Jill Blender rigs, including local extracted pose-track playback and experimental, hand-keyed `HELLO` and `THANK-YOU` demos.
 
-Pose playback is available only for glosses with locally extracted ASL-Citizen landmarks. It is an experimental retarget of isolated signs, not validated sentence grammar, fluent signing, or facial/non-manual signing. Groq output is not expert-reviewed ASL translation, and the local fallback is word lookup rather than translation. Read the repository's [model backbone guide](../MODEL_BACKBONE.md) for pose extraction, setup, API behavior, and limitations.
+Pose playback is available only for glosses with locally extracted ASL-Citizen landmarks. It is an experimental retarget of isolated signs, not validated sentence grammar, fluent signing, or facial/non-manual signing. Groq output is not expert-reviewed ASL translation, and the local fallback is word lookup rather than translation. Read the repository's [README](../README.md) for setup, data licensing, API behavior, and limitations.
 
 ## Run locally
 

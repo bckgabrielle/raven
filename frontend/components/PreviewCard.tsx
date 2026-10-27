@@ -93,7 +93,7 @@ export default function PreviewCard(p: Props) {
           </span>
           Your ASL preview
         <h2 id="preview-title" className="text-lg font-semibold">
-          ASL draft and avatar
+          Sign references and avatar
         </h2>
         {chip}
       </div>
@@ -111,7 +111,7 @@ export default function PreviewCard(p: Props) {
             Add English on the left, then choose Translate to ASL.
         <div className="grid place-items-center rounded-xl bg-[#f3f7fe] px-6 py-16 text-center">
           <span className="text-4xl" aria-hidden>🤟</span>
-          <p className="mt-3 font-medium">Your gloss draft will appear here</p>
+          <p className="mt-3 font-medium">Your sign exploration will appear here</p>
           <p className="muted mt-1 max-w-xs text-sm">
             Enter or transcribe English, then review the suggested ASL gloss sequence.
           </p>

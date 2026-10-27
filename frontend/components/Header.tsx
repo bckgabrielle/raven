@@ -27,15 +27,18 @@ export default function Header() {
           <a href="#top" aria-current="page" className="nav-link hidden sm:inline-block">
             Translate
           <span className="hidden border-l border-white/30 pl-3 text-sm text-white/80 md:inline">
-            ASL gloss studio
+            Learn ASL with Raven
           </span>
         </div>
         <nav aria-label="Main" className="flex items-center gap-5 text-sm">
           <a
-            href="#top"
+            href="#practice"
             aria-current="page"
             className="hidden border-b-2 border-[var(--accent)] pb-0.5 font-medium sm:inline-block"
           >
+            Alphabet practice
+          </a>
+          <a href="#explore" className="hidden text-white/80 hover:underline sm:inline">
             Explore signs
           </a>
         </nav>

@@ -1,12 +1,17 @@
-# Raven
+# Raven — learn ASL
 
+<<<<<<< Updated upstream
 ## Intended product pipeline
 Raven is a local-first research prototype for an English/audio → ASL gloss draft → recorded pose clip → Blender avatar workflow. It combines a Next.js web app, a FastAPI backend, the ASL-Citizen isolated-sign dataset, MediaPipe pose extraction, and exported Jack/Jill avatar rigs.
+=======
+Raven is an early-stage, local-first prototype exploring how a 3D signing avatar can make ASL learning more visual and engaging, and how avatar-based signing might one day support access to spoken information in conversations and events.
+>>>>>>> Stashed changes
 
-> **Important:** This is not a fluent ASL translator. Groq drafts are unreviewed, the local fallback is exact word lookup, and avatar motion replays isolated recorded signs. The prototype does not provide ASL grammar, facial expression, or non-manual markers. Do not use it for critical communication.
+The avatar is the center of the product experience. Today, Raven can preview its 3D rigs and experimentally replay selected, locally prepared sign-pose clips. Longer-term, Raven aims to help learners explore signs and to make conversations or event content more accessible to Deaf and hard-of-hearing people. That communication-assistance experience is a vision—not a current real-time translation feature.
 
-## What the app can do
+> **Important limitations:** Raven is not a fluent or validated English-to-ASL translator, an interpreter, or a substitute for a qualified interpreter. Its generated glosses are unreviewed, local text fallback is exact word lookup, and avatar playback uses isolated sign examples rather than fluent sentence-level ASL. Do not rely on Raven for critical communication.
 
+<<<<<<< Updated upstream
 3. Backend prepares and queues the text
    It cleans and standardizes the text, then sends it to the AI model.
 - Accept typed English or audio; optionally transcribe audio with Groq Whisper.
@@ -16,24 +21,80 @@ Raven is a local-first research prototype for an English/audio → ASL gloss dra
 - Extract body and hand landmarks from dataset videos on the local computer and play available pose tracks on the Raven avatar.
 - Upload one isolated sign video to a separately trained video-to-gloss classifier.
 - Preview the included Jack and Jill 3D rigs and hand-keyed HELLO/THANK-YOU demonstrations.
+=======
+## What Raven can do today
+>>>>>>> Stashed changes
 
-Pose tracks are available only for glosses that have been extracted and contain usable landmarks. Adjacent clips are not sentence-level signing. The rig retarget is experimental and requires human review.
+- Practice ASL fingerspelling using optional static alphabet images from a Kaggle dataset.
+- Enter English text or upload a text file and request an unreviewed ASL gloss draft through the configured Groq service.
+- Record or upload audio for Groq transcription, then review the transcript before continuing.
+- Fall back to exact local gloss lookup if Groq gloss generation is unavailable. This is not translation.
+- Find matching isolated ASL-Citizen reference videos when the local dataset is configured.
+- Extract body and hand landmarks locally from selected ASL-Citizen videos and experimentally retarget available pose tracks to the Raven avatar.
+- Preview the Jack and Jill Blender rigs and experimental hand-keyed `HELLO` and `THANK-YOU` gestures.
+- Optionally recognize a single isolated sign video if a compatible classifier checkpoint has been trained and configured.
 
-## Before cloning: make the project cloneable
+The supported pose clips depend on which dataset examples have been extracted and contain usable landmarks. A sequence of isolated clips does not convey ASL grammar, natural transitions, facial expressions, or non-manual markers.
 
+<<<<<<< Updated upstream
 6. Backend saves the result
    The target is to store the motion result, model version, source text, and request status.
 The clone will contain only files committed and pushed to the repository. Before sharing a branch, make sure the source, README, and exported avatar assets (`frontend/public/raven-avatar.glb` and `frontend/public/raven-avatar-jill.glb`) are committed. Do **not** commit:
+=======
+## Product direction
+>>>>>>> Stashed changes
 
-- Your `.env`, API keys, or other credentials.
-- ASL-Citizen videos or split files.
-- Extracted `derived\pose_tracks` data or trained model checkpoints.
+Raven is being developed around two related experiences:
 
-Each collaborator must obtain the dataset under its own applicable license and configure their own local machine. Review the ASL-Citizen terms before using, sharing, or deploying derived pose tracks; local extraction does not remove dataset restrictions.
+1. **Learn ASL:** use the avatar, reference signs, and alphabet examples to explore signs and practice.
+2. **Communication assistance (future vision):** explore ways an avatar could help make conversations or events more accessible.
 
-## Requirements
+The second use case is not implemented as live speech-to-ASL translation. It will require Deaf-led research and co-design, qualified ASL expertise, consented and appropriately licensed data, evaluation, privacy safeguards, and careful validation before it can be presented as a dependable accessibility service.
 
-These instructions use Windows PowerShell.
+## Technologies
+
+| Area | Technology | Role and current status |
+|---|---|---|
+| Web application | Next.js, React, TypeScript | User interface and same-origin API proxies. |
+| Backend API | Python, FastAPI, Pydantic | Local service for dataset lookup, pose and alphabet samples, transcription, gloss drafting, and optional sign recognition. |
+| Language and speech services | Groq API | Optional audio transcription and unreviewed gloss drafting. Requests require user consent in the UI. |
+| Video recognition | PyTorch, OpenCV | CNN + GRU isolated-sign classifier code; a trained checkpoint is optional and is not included. |
+| Pose extraction | MediaPipe Holistic | Local extraction of body and hand landmarks from ASL-Citizen videos. |
+| 3D avatar | Blender, exported GLB rigs, Three.js | Jack/Jill rig assets and experimental browser preview/pose retargeting. |
+| Optional alphabet dataset download | KaggleHub | Explicit, user-triggered download helper; the app does not download the dataset on startup. |
+
+### Zetaris and Meterless
+
+Zetaris Lightning Catalog and Meterless Nightshift have been considered as possible supporting technologies, but **neither is integrated into Raven**:
+
+- **Zetaris Lightning Catalog** is a data catalog/federation platform. Raven currently reads its local CSV/pose files directly; no Zetaris instance or connection is required.
+- **Meterless Nightshift** may provide a local model-serving/runtime option on compatible hardware. Raven currently uses its Groq integration for configured transcription and gloss drafting; it does not send requests to Nightshift.
+
+Installing either product does not change Raven's behavior. Treat both as future evaluation options, not current Raven dependencies or capabilities.
+
+## Datasets and attribution
+
+Raven can use the following datasets when a user obtains and configures them locally. Dataset contents are not included in this repository.
+
+### American Sign Language Dataset — Kaggle
+
+The optional alphabet-practice feature uses static image samples from [American Sign Language Dataset](https://www.kaggle.com/datasets/chaitanyakakade77/american-sign-language-dataset), published by **Chaitanya Kakade**. Kaggle lists the dataset license as **MIT**. The dataset is used as a local visual reference for alphabet practice; these images do not power the ASL-Citizen video classifier, provide dynamic fingerspelling recognition, or animate the avatar.
+
+Raven does not redistribute the Kaggle images. Obtain them from Kaggle and review the current dataset page and license before reusing or redistributing the dataset or derived material. The MIT license for Raven's own code does not change the dataset's terms.
+
+### ASL Citizen — Microsoft Research and collaborators
+
+The optional isolated-sign recognition, local reference video, and pose-extraction workflow is designed for [ASL Citizen](https://www.microsoft.com/en-us/research/project/asl-citizen/), a community-sourced isolated-sign dataset created by Microsoft Research and collaborators, with community contributors.
+
+Microsoft Research's [ASL Citizen Dataset License](https://www.microsoft.com/en-us/research/project/asl-citizen/dataset-license/) limits use of the materials, including data, to **non-commercial, non-revenue-generating research purposes**. It also restricts redistribution of the data and modifications to it. Do not commit the videos, splits, derived pose tracks, or other dataset materials to this repository or distribute them through Raven. Obtain the data from the official [Microsoft download page](https://www.microsoft.com/en-us/download/details.aspx?id=105253), read the current license and consent terms, and independently determine whether your intended use is permitted. Contact Microsoft as directed by its license for commercial-use questions.
+
+Please cite the [ASL Citizen paper](https://arxiv.org/abs/2304.05934) in research outputs:
+
+> Desai, A. et al. “ASL Citizen: A Community-Sourced Dataset for Advancing Isolated Sign Language Recognition.” 2023. [arXiv:2304.05934](https://arxiv.org/abs/2304.05934).
+
+## Run locally (Windows / PowerShell)
+
+### Requirements
 
 ## Current backend
 
@@ -53,63 +114,37 @@ and pose-track JSON files remain the fallback. Neither integration is used for
 MediaPipe extraction, model training, or avatar animation. Copy [.env.example](./.env.example)
 for local configuration and keep real credentials and data files untracked.
 - Git.
-- Python **3.12** (the commands below use the Python launcher `py -3.12`).
-- Node.js **20.9 or newer** and npm (Next.js 16 requires Node 20.9+).
-- Disk space for Python packages, local pose tracks, and the dataset videos.
-- The ASL-Citizen dataset at a local path such as `D:\ASL_Citizen\ASL_Citizen`.
-- Optional: a Groq API key for online transcription and gloss drafting.
-- Optional: an NVIDIA GPU and a trained checkpoint for isolated-sign classification.
-- Optional: Meterless Nightshift on Windows with compatible local model hardware.
+- Python 3.12 recommended.
+- Node.js 20.9 or later and npm.
+- Optional: ASL Citizen files, obtained under the dataset's terms.
+- Optional: Kaggle access and authentication to download the alphabet images.
+- Optional: a Groq API key for transcription and gloss drafting.
+- Optional: a compatible trained checkpoint for isolated-sign recognition.
+- Optional: Blender to edit or re-export the included rigs.
 
-Blender is **not** required for the normal web preview because the exported GLB avatar models are included. It is only needed to re-export the rigs after Blender edits.
-
-## 1. Clone the repository
-
-Use the repository URL and branch shared by the project owner:
+### 1. Clone and install
 
 ```powershell
 git clone https://github.com/bckgabrielle/raven.git
 Set-Location raven
-```
 
-If the changes you need are on a feature branch, check it out before continuing:
-
-```powershell
-git switch <branch-name>
-```
-
-Check that both exported avatar files exist:
-
-```powershell
-Test-Path .\frontend\public\raven-avatar.glb
-Test-Path .\frontend\public\raven-avatar-jill.glb
-```
-
-Both commands should return `True`. If they do not, ask the repository owner to push the avatar assets and the branch containing the pose-track implementation.
-
-## 2. Install backend dependencies
-
-From the repository root:
-
-```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r backend\requirements.txt
 ```
 
-If PowerShell blocks virtual-environment activation, either allow scripts for this PowerShell session or use the environment's interpreter directly:
+In the frontend directory, install JavaScript dependencies:
 
 ```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\.venv\Scripts\Activate.ps1
+Set-Location frontend
+npm ci
+Set-Location ..
 ```
 
-The backend requirements include FastAPI, PyTorch, OpenCV, and a pinned MediaPipe release. MediaPipe processes dataset frames locally. Installation can take a while, particularly for PyTorch and OpenCV.
+### 2. Configure optional data
 
-## 3. Prepare the local dataset
-
-Obtain ASL-Citizen separately and place it outside the Git clone. The expected layout is:
+ASL Citizen is optional for general frontend use, but is required for local sign references and pose extraction. Keep the dataset outside the Git clone. The backend expects a folder structure similar to:
 
 ```text
 D:\ASL_Citizen\ASL_Citizen\
@@ -118,167 +153,112 @@ D:\ASL_Citizen\ASL_Citizen\
     val.csv
     test.csv
   videos\
-    <video files referenced by the split CSVs>
-  use.txt
+    <dataset videos>
 ```
 
-Check the paths and split names without moving the dataset into the repository:
+To download the separate alphabet-image dataset, install KaggleHub and run Raven's optional downloader:
 
 ```powershell
-$dataset = "D:\ASL_Citizen\ASL_Citizen"
-Test-Path "$dataset\splits\train.csv"
-Test-Path "$dataset\splits\val.csv"
-Test-Path "$dataset\videos"
+python -m pip install kagglehub
+$env:PYTHONPATH = (Resolve-Path .\backend).Path
+python -m asl_backbone.download_alphabet_dataset
 ```
 
-The `test.csv` split is not used for pose extraction or model selection. Keep the videos and derived files on your local machine.
+The command reports the downloaded path after checking the letter-image folders. The app does not download this data automatically.
 
-## 4. Extract pose tracks locally
+### 3. Configure optional Groq access
 
-Pose extraction is separate from classifier training. It runs MediaPipe Holistic and a hands-only recovery detector on local videos, then writes derived landmark JSON to:
+Groq is optional. Configure `GROQ_API_KEY` and, if desired, `GROQ_CHAT_MODEL` and `GROQ_STT_MODEL` in a private, untracked root `.env` file that you manage locally. Do not put credentials in frontend variables, commit them, or send them in messages. The repository ignores `.env`.
 
-```text
-<dataset root>\derived\pose_tracks\
+The UI asks for consent before sending text or audio to Groq. Audio is submitted for transcription; Raven does not send dataset videos or pose tracks to Groq. Without Groq, exact local word lookup may still work when ASL Citizen is configured, but audio transcription is unavailable.
+
+### 4. Start the backend
+
+Open a PowerShell terminal at the repository root. Set only the paths for datasets you have actually downloaded:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\backend).Path
+$env:ASL_DATASET_ROOT = "D:\ASL_Citizen\ASL_Citizen"
+# Optional: set this to the KaggleHub dataset path or its ASL_Data subfolder.
+$env:ASL_ALPHABET_DATASET_ROOT = "C:\path\to\american-sign-language-dataset"
+# Optional: set this if you have a compatible trained checkpoint.
+# $env:ASL_CHECKPOINT = "C:\path\to\asl_sign_model.pt"
+python -m uvicorn asl_backbone.api:app --host 127.0.0.1 --port 8000
 ```
 
-First extract one known training gloss to check your install and disk space. Run from the repository root, with the virtual environment active:
+If a dataset is not configured, omit its variable. Keep the backend bound to localhost for local development.
+Confirm it is responding before opening the frontend:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/v1/health
+```
+
+### 5. Start the frontend
+
+Open a second PowerShell terminal:
+
+```powershell
+Set-Location frontend
+$env:ASL_BACKEND_URL = "http://127.0.0.1:8000"
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). The frontend can display its learning interface without the optional datasets; dataset-dependent features will be unavailable until the relevant local paths are configured and the backend is restarted.
+
+`ASL_BACKEND_URL` is the backend **origin** only (for example, `http://127.0.0.1:8000`); do not append `/v1`. It defaults to that value if unset. Set it in the same terminal before starting Next.js, and restart the frontend after changing it. Keep both backend and frontend terminals running.
+
+### Troubleshooting backend connections
+
+- **Frontend API reports a 502 / could not reach model API:** start the FastAPI backend and confirm `http://127.0.0.1:8000/v1/health` responds. The frontend alone does not start the backend.
+- **Alphabet panel reports no examples:** set `ASL_ALPHABET_DATASET_ROOT` in the backend terminal to the KaggleHub dataset directory and restart Uvicorn. Check that `GET http://127.0.0.1:8000/v1/alphabet` lists letters.
+- **Avatar model appears, but extracted signs cannot play:** GLB loading is served by Next.js; extracted motion additionally requires ASL Citizen configured and a pose track for the requested gloss. Confirm `GET http://127.0.0.1:8000/v1/poses/HELLO` responds if that pose has been extracted.
+
+### Optional pose extraction
+
+Extract one training example first, replacing `APPLE` with a gloss in `splits\train.csv`:
 
 ```powershell
 $env:PYTHONPATH = (Resolve-Path .\backend).Path
 python -m asl_backbone.extract_pose_tracks --dataset-root "D:\ASL_Citizen\ASL_Citizen" --gloss "APPLE" --limit 1
 ```
 
-To extract **all training examples for APPLE**, omit `--limit 1`:
+Pose data is written under the dataset's `derived\pose_tracks` folder, not into the Git repository. The extraction tool excludes the test split. Verify data licensing and storage requirements before extracting, sharing, or using any derived material.
 
-```powershell
-python -m asl_backbone.extract_pose_tracks --dataset-root "D:\ASL_Citizen\ASL_Citizen" --gloss "APPLE"
-```
+### Optional classifier training
 
-To extract the full training split, remove both `--gloss` and `--limit`:
-
-```powershell
-python -m asl_backbone.extract_pose_tracks --dataset-root "D:\ASL_Citizen\ASL_Citizen"
-```
-
-Existing tracks are skipped on reruns. Use `--overwrite` to regenerate them, `--fps 10` to save fewer frames per second, or `--split val` to process validation data. Extraction deliberately rejects the test split. Full-dataset extraction can take substantial time and disk space; check the dataset license before sharing any derived output.
-
-## 5. Configure optional Groq access
-
-Groq is optional. Without a Groq key, the app can still perform local exact-word lookup, show dataset references, and play extracted pose tracks. Groq is currently the only configured external gloss/transcription provider in Raven.
-
-To enable it, create a **private, untracked root `.env` yourself** with the server-side settings:
-
-```text
-GROQ_API_KEY=<your key>
-GROQ_CHAT_MODEL=llama-3.3-70b-versatile
-GROQ_STT_MODEL=whisper-large-v3-turbo
-```
-
-The Python backend loads this file when it starts. Keep the key out of the frontend, browser storage, Git, screenshots, and messages. Never use a `NEXT_PUBLIC_` variable for a secret. The UI requires consent before submitting text/audio to Groq. Do not send dataset videos or extracted pose tracks to Groq.
-
-Restart the backend after changing its environment configuration. Raven does not independently verify a user's Groq account or model access.
-
-## 6. Start the backend
-
-Open a PowerShell terminal at the repository root, activate `.venv`, and run:
-
-```powershell
-$env:PYTHONPATH = (Resolve-Path .\backend).Path
-$env:ASL_DATASET_ROOT = "D:\ASL_Citizen\ASL_Citizen"
-python -m uvicorn asl_backbone.api:app --host 127.0.0.1 --port 8000
-```
-
-Keep this terminal running. `ASL_DATASET_ROOT` is required for local catalog lookup, reference videos, and pose tracks. Set `ASL_CHECKPOINT` only if you have trained or otherwise obtained a compatible local classifier checkpoint:
-
-```powershell
-$env:ASL_CHECKPOINT = (Resolve-Path .\artifacts\asl_sign_model.pt).Path
-```
-
-The checkpoint is optional for text/audio gloss drafting and avatar playback.
-
-Check that the backend is ready in a separate PowerShell window:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/v1/health
-```
-
-The reference catalog should report as loaded when `ASL_DATASET_ROOT` is set. A recognizer status of `model_not_loaded` is normal if you did not configure `ASL_CHECKPOINT`.
-
-## 7. Install and start the frontend
-
-Open a **second** PowerShell terminal:
-
-```powershell
-Set-Location .\frontend
-npm ci
-$env:ASL_BACKEND_URL = "http://127.0.0.1:8000"
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000). Keep both terminals running while using the app. `ASL_BACKEND_URL` is read by the Next.js server; it is not a browser-side API key. The backend defaults to `http://127.0.0.1:8000` if this variable is omitted.
-
-## 8. Try a sign and avatar clip
-
-After the backend and frontend are running:
-
-1. Enter a short input containing an extracted gloss (for example, `APPLE`).
-2. Review the gloss draft and its source/status; it is unreviewed.
-3. Confirm the gloss is shown as having an available pose track.
-4. Select **Play extracted signs** in the avatar panel.
-5. Compare the avatar motion with the corresponding recorded reference video in the page.
-
-If Groq is not configured, Raven's fallback matches words exactly against the dataset. It will not translate a general English sentence. To test the pose API directly, use:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/v1/poses/APPLE
-```
-
-If the gloss has no track, run the extraction command for that exact training label. If no clip with usable hand/body landmarks exists, the API reports no pose track rather than claiming the sign can be animated.
-
-## 9. Optional: train the isolated-sign recognizer
-
-Training is **not required** for gloss-to-pose playback. It enables a separate feature: upload one isolated sign video and receive model predictions.
-
-From the repository root, with the Python environment active:
+The video-to-gloss classifier is separate from avatar pose playback. To train it locally:
 
 ```powershell
 $env:PYTHONPATH = (Resolve-Path .\backend).Path
 python -m asl_backbone.train --dataset-root "D:\ASL_Citizen\ASL_Citizen" --output "artifacts\asl_sign_model.pt" --device auto
 ```
 
-Training uses `train.csv`, selects with `val.csv`, and leaves `test.csv` untouched. Full training can require significant compute and time. Configure `ASL_CHECKPOINT` in the backend terminal and restart the backend to enable `/v1/recognize`.
+Training requires local ASL Citizen data and may take substantial compute. Use the training and validation splits as intended by the training command; do not use test data for model selection. A trained checkpoint is not included.
 
-## Meterless Nightshift: optional local model provider
+## Architecture at a glance
 
-[Meterless Nightshift for Windows](https://www.meterless.ai/windows.html) can serve local models through an OpenAI-compatible API. Its Windows edition requires a compatible Windows 10/11 machine and local model hardware; check the current product requirements before installation. Select a local-only model/runtime if you want inference to stay on your computer.
+```text
+Next.js learning UI
+  ├─ alphabet practice ─ same-origin proxy ─ FastAPI ─ local Kaggle image samples
+  ├─ text/audio ─ same-origin proxy ─ FastAPI ─ optional Groq service
+  ├─ sign references ─ FastAPI ─ local ASL Citizen CSV/videos
+  ├─ pose playback ─ FastAPI ─ local derived landmarks ─ Three.js avatar
+  └─ isolated video recognition ─ FastAPI ─ optional local PyTorch checkpoint
+```
 
-**Current integration status:** Raven does not currently send gloss-drafting requests to Meterless. Its gloss and transcription service is configured for Groq; setting a Meterless URL or installing Nightshift alone will not switch Raven to a local model. A small backend provider adapter/configuration change is required first. The frontend and avatar need not be rewritten for that provider change.
+Zetaris and Meterless are not part of this request flow.
 
-When a Meterless provider adapter is available, the setup should use the **actual API base URL, model identifier, and local runtime token shown by Nightshift**. Website examples are illustrative and are not guaranteed to be the values for your installation. Keep any token server-side. Test the local model from the same computer before configuring Raven, and verify the model can return Raven's expected JSON gloss shape. Do not assume a local model's ASL draft is more accurate than Groq.
+## Responsible-use note
 
-Nightshift's free browser experience is useful for trying the product, but it is not by itself a local API connection for this Raven clone. Use the Windows application/runtime when Raven needs to call a local model.
+ASL is a full language, not English represented word-for-word with signs. Signing varies among people and communities. Raven is an experimental learning/research prototype whose gloss output and avatar movements are not validated translations. Involve Deaf ASL users and qualified ASL experts in design and evaluation. Protect signer privacy, obtain appropriate consent, and use qualified interpreters when interpretation is required.
 
-## Zetaris: optional data catalog/query platform
+## Project license
 
-[Zetaris Lightning Catalog](https://github.com/zetaris/lightning-catalog) is an open-source catalog/data-virtualization project. It is not an ASL model, pose extractor, or avatar runtime. [Zetaris Cloud](https://www.zetaris.com/cloud) describes a free cluster for evaluation, but the cloud page also notes cloud-provider compute charges; check current terms before creating resources.
+Original Raven code in this repository is made available under the [MIT License](./LICENSE). This license does **not** apply to datasets, third-party libraries, fonts, or avatar/Blender assets unless their respective owners separately grant those rights. In particular, ASL Citizen remains subject to Microsoft's research license and use restrictions; the Kaggle alphabet dataset remains subject to its dataset license. See [LICENSE](./LICENSE) and the dataset terms above.
 
-**Current integration status:** Raven does not connect to Zetaris. It reads the ASL-Citizen CSV splits and local derived JSON directly. For this small local workflow, adding Zetaris would introduce another service without improving gloss accuracy or motion quality. Use it only if you later need federated SQL access to multiple data sources or a centrally managed catalog, and review the dataset license before registering or sharing any dataset-derived metadata.
+## Development checks
 
-No Zetaris account, token, or service is required to clone and run Raven.
-
-## Troubleshooting
-
-- **`Set ASL_DATASET_ROOT` / catalog unavailable:** Set the environment variable in the backend terminal to the folder containing `splits` and `videos`, then restart Uvicorn.
-- **Pose button disabled:** The current gloss sequence has no successfully extracted local pose track. Run extraction for the exact CSV gloss and draft again.
-- **Pose endpoint returns 404:** Confirm the training CSV contains that gloss and that extraction completed. The endpoint deliberately excludes clips without usable landmark coverage.
-- **Frontend cannot reach backend:** Check that Uvicorn is still running on port 8000 and that `ASL_BACKEND_URL` is set in the frontend terminal.
-- **Groq requests fail:** Check Groq account/model availability and the backend terminal errors. Without Groq, local exact word lookup remains available; audio transcription does not.
-- **Rig does not load:** Check that the two `.glb` files exist under `frontend\public` and that the browser supports WebGL.
-- **Windows packages fail to install:** Confirm Python 3.12 and install requirements inside the activated `.venv`; don't mix interpreter environments.
-
-## Checks for contributors
-
-Run from the repository root:
+Run backend tests from the repository root:
 
 ```powershell
 $env:PYTHONPATH = (Resolve-Path .\backend).Path
@@ -292,19 +272,3 @@ npm run lint
 npx tsc --noEmit
 npm run build
 ```
-
-## API overview
-
-- `GET /v1/health` — backend, dataset catalog, and Groq configuration status.
-- `POST /v1/translate` — unreviewed Groq gloss draft or local exact-word fallback, with reference and pose availability.
-- `POST /v1/transcribe` — audio transcription; requires Groq.
-- `GET /v1/poses/{gloss}` — locally extracted pose track for one gloss.
-- `GET /v1/videos/{video_id}` — local reference video from the dataset.
-- `POST /v1/recognize?top_k=5` — isolated-sign recognition; requires `ASL_CHECKPOINT`.
-
-The frontend proxies these calls through same-origin `/api` routes. Keep the Python API bound to localhost unless you have reviewed authentication, dataset licensing, and deployment security.
-
-## More detail
-
-- [Model backbone, pose extraction, Blender export, and dataset restrictions](./MODEL_BACKBONE.md)
-- [Frontend setup and behavior](./frontend/README.md)

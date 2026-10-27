@@ -213,10 +213,10 @@ export default function InputCard({
         </span>
         English input
       <h2 id="input-title" className="mb-2 text-lg font-semibold">
-        Start with words or speech
+        Explore words or speech
       </h2>
       <p className="muted mb-4 text-sm">
-        Transcribe spoken English, then draft ASL glosses and find reference signs.
+        Explore how Raven turns text or speech into a draft sign sequence with available references.
       </p>
 
       <div className="seg" role="tablist" aria-label="Input method">
@@ -490,7 +490,7 @@ export default function InputCard({
           </>
         ) : (
           <>
-            <ArrowRight size={16} aria-hidden /> Draft ASL glosses
+            <ArrowRight size={16} aria-hidden /> Explore sign sequence
           </>
         )}
       </button>
