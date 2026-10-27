@@ -1,11 +1,14 @@
 # Raven
 
+## Intended product pipeline
 Raven is a local-first research prototype for an English/audio → ASL gloss draft → recorded pose clip → Blender avatar workflow. It combines a Next.js web app, a FastAPI backend, the ASL-Citizen isolated-sign dataset, MediaPipe pose extraction, and exported Jack/Jill avatar rigs.
 
 > **Important:** This is not a fluent ASL translator. Groq drafts are unreviewed, the local fallback is exact word lookup, and avatar motion replays isolated recorded signs. The prototype does not provide ASL grammar, facial expression, or non-manual markers. Do not use it for critical communication.
 
 ## What the app can do
 
+3. Backend prepares and queues the text
+   It cleans and standardizes the text, then sends it to the AI model.
 - Accept typed English or audio; optionally transcribe audio with Groq Whisper.
 - Request an unreviewed ASL gloss draft from Groq.
 - If Groq gloss drafting is unavailable, find exact gloss/word matches in the local training CSV. This fallback is not translation.
@@ -18,6 +21,8 @@ Pose tracks are available only for glosses that have been extracted and contain 
 
 ## Before cloning: make the project cloneable
 
+6. Backend saves the result
+   The target is to store the motion result, model version, source text, and request status.
 The clone will contain only files committed and pushed to the repository. Before sharing a branch, make sure the source, README, and exported avatar assets (`frontend/public/raven-avatar.glb` and `frontend/public/raven-avatar-jill.glb`) are committed. Do **not** commit:
 
 - Your `.env`, API keys, or other credentials.
@@ -30,6 +35,23 @@ Each collaborator must obtain the dataset under its own applicable license and c
 
 These instructions use Windows PowerShell.
 
+## Current backend
+
+The backend currently supports durable local signing-request status/results,
+an SQLite-backed queue worker, exact single-gloss reference lookup, isolated
+video-sign recognition, feedback intake, and authenticated local dataset
+intake/review with consent/licence metadata and hashed manifests. It does not
+yet translate English sentences, generate motion, or run landmark ETL. See
+[backend/README.md](./backend/README.md) for setup, API routes, and limitations.
+
+Gloss drafting can optionally use Groq or a local Meterless Nightshift
+OpenAI-compatible endpoint. Drafts are validated against the catalog and remain
+unreviewed; provider failures fall back to local exact-gloss lookup. Zetaris
+Lightning Catalog can optionally serve catalog metadata through the configurable
+REST contract documented in [backend/README.md](./backend/README.md); local CSV
+and pose-track JSON files remain the fallback. Neither integration is used for
+MediaPipe extraction, model training, or avatar animation. Copy [.env.example](./.env.example)
+for local configuration and keep real credentials and data files untracked.
 - Git.
 - Python **3.12** (the commands below use the Python launcher `py -3.12`).
 - Node.js **20.9 or newer** and npm (Next.js 16 requires Node 20.9+).

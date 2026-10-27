@@ -9,6 +9,7 @@ import type { MobileTab, Stage, TranslationResult } from "@/lib/types";
 import Disclaimer from "./Disclaimer";
 import InputCard from "./InputCard";
 import PreviewCard from "./PreviewCard";
+import ProviderStatus from "./ProviderStatus";
 import ReportModal from "./ReportModal";
 
 type Request =
@@ -172,6 +173,8 @@ export default function TranslatorApp() {
           <span className="brand-text">ASL draft · human review required</span>
         </div>
       </div>
+
+      <ProviderStatus />
 
       <div role="tablist" aria-label="Workspace" className="seg mb-4 md:hidden">
         <button type="button" role="tab" aria-selected={tab === "input"} onClick={() => setTab("input")}>

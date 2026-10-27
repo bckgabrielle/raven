@@ -51,6 +51,7 @@ export default function ReportModal({ open, onClose, result, timeSec }: Props) {
     setError("");
     try {
       await sendFeedback({
+        resultId: result.id,
         category,
         details: details.trim(),
         playbackTimeSec: Math.round(timeSec * 10) / 10,
