@@ -66,9 +66,6 @@ Microsoft Research's [ASL Citizen Dataset License](https://www.microsoft.com/en-
 
 > Desai, A. et al. “ASL Citizen: A Community-Sourced Dataset for Advancing Isolated Sign Language Recognition.” 2023. [arXiv:2304.05934](https://arxiv.org/abs/2304.05934).
 
-## Run locally (Windows / PowerShell)
-
-### Requirements
 
 ## Current backend
 
