@@ -1,26 +1,44 @@
 /* Raven design tokens + shared classes.
-   To change the palette, edit ONLY the first block. */
+   To change the palette, edit ONLY the first block.
+   Warm palette: cream, sand, orange, forest green.
+   (--navy keeps its old name so existing components still work; it is now forest green.) */
 :root {
-  --navy: #0b2a5b;
-  --brand: #1a5fd0;
-  --brand-strong: #144bb0;
-  --brand-soft: #e8f0fe;
-  --accent: #f5b700; /* yellow: use as a fill with navy text, never as text on white */
-  --bg: #f4f7fc;
-  --surface: #ffffff;
-  --ink: #14213d;
-  --muted: #4f5b73;
-  --line: #dbe3f0;
-  --ok: #1f7a4d;
-  --ok-soft: #e6f4ec;
-  --warn: #8a5a12;
-  --warn-soft: #fbf1e4;
-  --danger: #b3261e;
-  --danger-soft: #fdecea;
+  --navy: #2f5d46;          /* header + avatar stage: deep forest green */
+  --brand: #3f7d5c;         /* friendly green */
+  --brand-strong: #2f6347;  /* green for text and links (6.9:1 on cream) */
+  --brand-soft: #e3efe3;
+  --accent: #e8833a;        /* warm orange: use as a fill with dark text, never as text on cream */
+  --accent-deep: #c9631c;
+  --leaf: #4c8a63;
+  --leaf-soft: #e3efe3;
+  --bg: #fbf5ea;           /* cream page background */
+  --surface: #fffdf8;      /* cards */
+  --sand: #f3e7d3;
+  --sand-deep: #ebd9bc;
+  --ink: #3b2a20;          /* espresso text */
+  --muted: #6f5b4d;
+  --ink-soft: #6f5b4d;
+  --line: #e6d8c3;
+  --line-strong: #d6c3a3;
+  --field-border: #a38b69; /* input borders: 3.2:1 on surface, meets the accessibility minimum */
+  --focus: #2f6347;
+  --ok: #276b43;
+  --ok-soft: #e1f0e4;
+  --warn: #7a420c;
+  --warn-soft: #fdf0dc;
+  --danger: #a8261b;
+  --danger-soft: #fdebe8;
 }
 
-body { background: var(--bg); color: var(--ink); font-family: var(--font-inter), system-ui, sans-serif; }
-:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+body {
+  background-color: var(--bg);
+  background-image: radial-gradient(1100px 420px at 90% -8%, #f7e4c8 0%, rgb(247 228 200 / 0) 65%);
+  background-repeat: no-repeat;
+  color: var(--ink);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+::selection { background: var(--sand-deep); color: var(--ink); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 
 .muted { color: var(--muted); }
 .brand-text { color: var(--brand-strong); }
@@ -28,41 +46,70 @@ body { background: var(--bg); color: var(--ink); font-family: var(--font-inter),
 .danger-text { color: var(--danger); }
 .divider { border-top: 1px solid var(--line); }
 
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 1px 2px rgb(59 42 32 / 0.05), 0 10px 28px rgb(59 42 32 / 0.06);
+}
 
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; border-radius: 12px; padding: 12px 16px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
-.btn:disabled { cursor: not-allowed; background: #e3e8f2; color: var(--muted); }
-.btn-primary { background: var(--brand); color: #fff; }
-.btn-primary:hover:not(:disabled) { background: var(--brand-strong); }
-.btn-ghost { background: var(--surface); border-color: var(--line); color: var(--ink); }
-.btn-ghost:hover:not(:disabled) { background: var(--bg); }
-.btn-link { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; color: var(--brand-strong); font-weight: 500; font-size: 14px; cursor: pointer; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px;
+  border: 1px solid transparent; border-radius: 14px;
+  padding: 11px 18px; font-size: 15px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { cursor: not-allowed; background: #ece2d0; border-color: transparent; color: var(--muted); box-shadow: none; }
+.btn-primary { background: var(--accent); color: #2b1d14; box-shadow: 0 2px 0 var(--accent-deep); }
+.btn-primary:hover:not(:disabled) { background: #d9702a; }
+.btn-ghost { background: var(--surface); border-color: var(--line-strong); color: var(--ink); }
+.btn-ghost:hover:not(:disabled) { background: var(--sand); }
+.btn-link { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; color: var(--brand-strong); font-weight: 600; font-size: 14px; cursor: pointer; }
 .btn-link:hover:not(:disabled) { text-decoration: underline; }
 .btn-link:disabled { color: var(--muted); cursor: default; opacity: 0.6; }
-.btn-icon { align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; border: 0; background: none; cursor: pointer; }
-.btn-icon:hover { background: var(--bg); }
+.btn-icon { align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; border: 0; background: none; color: var(--ink); cursor: pointer; }
+.btn-icon:hover { background: var(--sand); }
 
-.chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 500; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 600; }
 .chip-brand { background: var(--brand-soft); color: var(--brand-strong); }
 .chip-ok { background: var(--ok-soft); color: var(--ok); }
 .chip-warn { background: var(--warn-soft); color: var(--warn); }
 
-.alert { border-radius: 12px; padding: 12px 14px; font-size: 14px; }
-.alert-brand { background: var(--brand-soft); }
+.alert { border-radius: 14px; padding: 12px 14px; font-size: 14px; }
+.alert-brand { background: var(--sand); border: 1px solid var(--sand-deep); }
 .alert-warn { background: var(--warn-soft); color: var(--warn); }
 .alert-danger { background: var(--danger-soft); color: var(--danger); }
 
-.field { border: 1px solid var(--line); border-radius: 12px; padding: 12px; font: inherit; font-size: 15px; background: var(--surface); color: var(--ink); }
-.field:focus { border-color: var(--brand); }
+.field {
+  border: 1px solid var(--field-border); border-radius: 14px; padding: 12px;
+  font: inherit; font-size: 15px; background: var(--surface); color: var(--ink);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field:hover { border-color: var(--brand-strong); }
+.field:focus { border-color: var(--brand-strong); box-shadow: 0 0 0 3px rgb(76 138 99 / 0.25); }
+.field::placeholder { color: var(--muted); opacity: 0.85; }
 .field[aria-invalid="true"] { border-color: var(--danger); }
 
-.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: #eaf0fa; border-radius: 12px; padding: 4px; }
-.seg button { display: flex; align-items: center; justify-content: center; gap: 8px; border: 0; background: none; border-radius: 9px; padding: 9px; font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; }
-.seg button[aria-selected="true"] { background: var(--surface); color: var(--brand-strong); box-shadow: 0 1px 2px rgb(0 0 0 / 0.1); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--sand); border-radius: 14px; padding: 4px; }
+.seg button {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; border: 0; background: none; border-radius: 11px; padding: 9px;
+  font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.seg button:hover { color: var(--ink); }
+.seg button[aria-selected="true"] { background: var(--surface); color: var(--brand-strong); box-shadow: 0 1px 3px rgb(59 42 32 / 0.15); }
 
 .range { width: 100%; accent-color: var(--brand); }
 .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin 0.8s linear infinite; }
 .wave { transform-origin: bottom center; animation: wave 1.2s ease-in-out infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes wave { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(14deg); } }
-@media (prefers-reduced-motion: reduce) { .spinner, .wave { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner, .wave { animation: none; }
+  .btn, .field, .seg button { transition: none; }
+  .btn:active:not(:disabled) { transform: none; }
+}

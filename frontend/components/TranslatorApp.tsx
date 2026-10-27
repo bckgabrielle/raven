@@ -9,6 +9,32 @@ import InputCard from "./InputCard";
 import PreviewCard from "./PreviewCard";
 import ReportModal from "./ReportModal";
 
+/** Decorative welcome illustration. Hidden from assistive tech. */
+function HeroArt() {
+  return (
+    <div className="hero-art hidden md:block" aria-hidden>
+      <svg viewBox="-100 -100 200 200">
+        <path
+          d="M60,-70C82,-50,92,-18,84,12C76,42,52,66,22,76C-8,86,-42,80,-64,58C-86,36,-92,-4,-78,-36C-64,-68,-30,-92,4,-92C28,-93,44,-86,60,-70Z"
+          fill="var(--sage-soft)"
+          stroke="var(--olive)"
+          strokeWidth="1.5"
+          strokeDasharray="5 6"
+        />
+      </svg>
+      <span className="hero-hand">🤟</span>
+      <div className="bubble">
+        <span className="bubble-words">
+          <span>Hello</span>
+          <span>Welcome</span>
+          <span>Thank you</span>
+          <span>Friend</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function TranslatorApp() {
   const [text, setText] = useState("");
   const [stage, setStage] = useState<Stage>("idle");
@@ -78,17 +104,16 @@ export default function TranslatorApp() {
 
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-7 md:py-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="reveal mb-7 flex items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">A new way to see what you say.</h1>
-          <p className="muted mt-2">Start with English. Explore an AI-generated ASL animation.</p>
+          <p className="eyebrow mb-2">English → ASL studio</p>
+          <h1 className="display text-4xl leading-tight md:text-5xl">A new way to see what you say.</h1>
+          <p className="muted mt-3 max-w-xl text-lg">Start with English. Explore an AI-generated ASL animation.</p>
+          <div className="pill mt-4 hidden md:inline-flex" aria-label="Translation direction: English to ASL">
+            English <ArrowRight size={14} aria-hidden /> <span className="brand-text">ASL</span>
+          </div>
         </div>
-        <div
-          className="hidden items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm font-medium md:flex"
-          aria-label="Translation direction: English to ASL"
-        >
-          English <ArrowRight size={14} aria-hidden /> <span className="brand-text">ASL</span>
-        </div>
+        <HeroArt />
       </div>
 
       <div role="tablist" aria-label="Workspace" className="seg mb-4 md:hidden">
@@ -100,11 +125,11 @@ export default function TranslatorApp() {
         </button>
       </div>
 
-      <div className="md:grid md:grid-cols-[320px_minmax(0,1fr)] md:items-start md:gap-5">
-        <div className={tab === "input" ? "" : "hidden md:block"}>
+      <div className="md:grid md:grid-cols-[340px_minmax(0,1fr)] md:items-start md:gap-6">
+        <div className={`reveal reveal-2 ${tab === "input" ? "" : "hidden md:block"}`}>
           <InputCard text={text} onTextChange={setText} busy={stage === "processing"} onTranslate={translate} />
         </div>
-        <div className={tab === "preview" ? "" : "hidden md:block"}>
+        <div className={`reveal reveal-3 ${tab === "preview" ? "" : "hidden md:block"}`}>
           <PreviewCard
             stage={stage}
             step={step}
@@ -119,7 +144,7 @@ export default function TranslatorApp() {
         </div>
       </div>
 
-      <div className="mt-5">
+      <div className="mt-6">
         <Disclaimer />
       </div>
 
