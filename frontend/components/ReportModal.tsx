@@ -5,7 +5,6 @@ import type { FormEvent } from "react";
 import { ArrowLeft, ArrowRight, Check, X } from "lucide-react";
 import { sendFeedback } from "@/lib/api";
 import { formatTime } from "@/lib/useAvatarPlayback";
-import { splitSentences } from "@/lib/validation";
 import type { IssueCategory, TranslationResult } from "@/lib/types";
 
 const CATEGORIES: { value: IssueCategory; label: string }[] = [
@@ -40,9 +39,6 @@ export default function ReportModal({ open, onClose, result, timeSec }: Props) {
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
-  const sentences = splitSentences(result.text);
-  const index = Math.floor((timeSec / Math.max(result.durationSec, 1)) * sentences.length);
-  const snippet = sentences[Math.min(Math.max(index, 0), sentences.length - 1)] ?? result.text;
   const categoryLabel = CATEGORIES.find((c) => c.value === category)?.label ?? "";
 
   async function submit(e: FormEvent) {
@@ -93,28 +89,32 @@ export default function ReportModal({ open, onClose, result, timeSec }: Props) {
 
         {status === "sent" ? (
           <div className="mt-4">
-            <p className="muted">Your feedback about {categoryLabel.toLowerCase()} has been saved with this preview for review.</p>
+            <p className="muted">
+              This feedback preview is simulated. Your note has not been saved or shared.
+            </p>
             <div className="mt-4 rounded-xl bg-[var(--bg)] p-4 text-sm">
               <p className="font-semibold">{categoryLabel}</p>
               <p className="muted mt-1">“{details.trim()}”</p>
-              {includeText && <p className="muted mt-2 text-xs">English text and result included</p>}
+              {includeText && <p className="muted mt-2 text-xs">Input and model version included</p>}
             </div>
             <p className="muted mt-4 text-center text-sm">
-              This won’t change the current animation. You can replay it at a slower speed.
+              Feedback does not change the current model result.
             </p>
             <button type="button" className="btn btn-primary mt-4 w-full" onClick={onClose}>
-              <ArrowRight size={16} aria-hidden /> Return to preview
+              <ArrowRight size={16} aria-hidden /> Return to result
             </button>
           </div>
         ) : (
           <form onSubmit={submit} className="mt-3" noValidate>
-            <p className="muted text-sm">Notice an error or an unsupported phrase? Tell us what needs another look.</p>
+            <p className="muted text-sm">
+              Notice a questionable sign prediction or reference? Tell us what needs another look.
+            </p>
 
             <div className="mt-4 rounded-xl bg-[var(--bg)] p-3 text-sm">
               <p className="muted text-xs font-semibold">
-                This preview · {formatTime(timeSec)} of {formatTime(result.durationSec)}
+                This result · {formatTime(timeSec)}
               </p>
-              <p className="mt-1">“{snippet}”</p>
+              <p className="mt-1 break-words">“{result.text}”</p>
               <p className="muted mt-1 text-xs">{result.modelVersion} · Playback time attached</p>
             </div>
 
@@ -161,7 +161,7 @@ export default function ReportModal({ open, onClose, result, timeSec }: Props) {
                 checked={includeText}
                 onChange={(e) => setIncludeText(e.target.checked)}
               />
-              Include my English text and generated result to help review this issue.
+              Include my input and model result to help review this issue.
             </label>
 
             <div className="mt-5 grid grid-cols-2 gap-3">
@@ -180,7 +180,9 @@ export default function ReportModal({ open, onClose, result, timeSec }: Props) {
                 )}
               </button>
             </div>
-            <p className="muted mt-3 text-center text-xs">Feedback supports prototype review, not an immediate correction.</p>
+            <p className="muted mt-3 text-center text-xs">
+              Feedback is currently a local demo and is not used for model training.
+            </p>
           </form>
         )}
       </div>
