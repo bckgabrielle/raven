@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Raven frontend
 
-## Getting Started
+The Next.js frontend proxies requests to the local FastAPI backend, keeping backend credentials out of the browser. The prototype supports:
 
-First, run the development server:
+- English text entry or `.txt` upload, followed by an unreviewed Groq-generated ASL gloss draft when configured.
+- Microphone recording or audio upload, transcribed by Groq and returned as editable text.
+- Local gloss/reference matching and isolated-sign video recognition when the backend is configured with the dataset and trained checkpoint.
+- Previews of the exported Raven Jack and Jill Blender rigs, including local extracted pose-track playback and experimental, hand-keyed `HELLO` and `THANK-YOU` demos.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Pose playback is available only for glosses with locally extracted ASL-Citizen landmarks. It is an experimental retarget of isolated signs, not validated sentence grammar, fluent signing, or facial/non-manual signing. Groq output is not expert-reviewed ASL translation, and the local fallback is word lookup rather than translation. Read the repository's [model backbone guide](../MODEL_BACKBONE.md) for pose extraction, setup, API behavior, and limitations.
+
+## Run locally
+
+From the repository root, create `.env` containing the server-side Groq key and optional model IDs:
+
+```text
+GROQ_API_KEY=your_groq_api_key
+GROQ_CHAT_MODEL=llama-3.3-70b-versatile
+GROQ_STT_MODEL=whisper-large-v3-turbo
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Start the Python backend in one PowerShell window:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+python -m pip install -r backend\requirements.txt
+$env:PYTHONPATH = (Resolve-Path .\backend).Path
+$env:ASL_DATASET_ROOT = "D:\ASL_Citizen\ASL_Citizen"
+$env:ASL_CHECKPOINT = (Resolve-Path .\artifacts\asl_sign_model.pt).Path
+python -m uvicorn asl_backbone.api:app --host 127.0.0.1 --port 8000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`ASL_CHECKPOINT` can be omitted when isolated-sign video recognition is not needed. The dataset path is needed for local gloss/reference matching.
 
-## Learn More
+Extract one local pose track before trying avatar playback. Replace `APPLE` with a gloss in the training split:
 
-To learn more about Next.js, take a look at the following resources:
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\backend).Path
+python -m asl_backbone.extract_pose_tracks --dataset-root "D:\ASL_Citizen\ASL_Citizen" --gloss "APPLE" --limit 1
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+See the model backbone guide for whole-training-split extraction and the dataset restrictions.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+In another PowerShell window:
 
-## Deploy on Vercel
+```powershell
+Set-Location frontend
+"ASL_BACKEND_URL=http://127.0.0.1:8000" | Set-Content .env.local
+npm install
+npm run dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Open [http://localhost:3000](http://localhost:3000). Audio is limited to 25 MB and requires the user's consent to submit to Groq. The backend key belongs only in the repository-root `.env`; do not use a `NEXT_PUBLIC_*` variable. Keep the backend bound to localhost unless the dataset license and deployment requirements have been reviewed.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Validation
+
+```powershell
+npm run lint
+npx tsc --noEmit
+npm run build
+```

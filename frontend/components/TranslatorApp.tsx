@@ -4,15 +4,23 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { STEP_MS, translateToAsl } from "@/lib/api";
 import type { Stage, TranslationResult } from "@/lib/types";
+import { recognizeSignVideo, transcribeAudio, translateText } from "@/lib/api";
+import type { MobileTab, Stage, TranslationResult } from "@/lib/types";
 import Disclaimer from "./Disclaimer";
 import InputCard from "./InputCard";
 import PreviewCard from "./PreviewCard";
 import ReportModal from "./ReportModal";
 
+type Request =
+  | { kind: "translation"; text: string }
+  | { kind: "transcription"; file: File }
+  | { kind: "recognition"; file: File };
+
 export default function TranslatorApp() {
   const [text, setText] = useState("");
+  const [transcriptNotice, setTranscriptNotice] = useState("");
   const [stage, setStage] = useState<Stage>("idle");
-  const [step, setStep] = useState(0);
+  const [requestKind, setRequestKind] = useState<Request["kind"]>("translation");
   const [result, setResult] = useState<TranslationResult | null>(null);
   const [error, setError] = useState("");
   const [reportOpen, setReportOpen] = useState(false);
@@ -27,12 +35,10 @@ export default function TranslatorApp() {
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = null;
   }
+  const lastRequestRef = useRef<Request | null>(null);
 
   useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    return () => abortRef.current?.abort();
   }, []);
 
   // On phones the preview opens below the input, so bring it into view when translating starts.
@@ -44,21 +50,36 @@ export default function TranslatorApp() {
   }, [stage]);
 
   async function translate() {
+  async function execute(request: Request) {
+    lastRequestRef.current = request;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    stopTimer();
     setStage("processing");
-    setStep(0);
+    setRequestKind(request.kind);
     setError("");
     setResult(null);
     // Progress steps are cosmetic until the back end reports real progress.
     timerRef.current = setInterval(() => setStep((s) => Math.min(s + 1, 2)), STEP_MS);
+    setTab("preview");
 
     try {
-      const output = await translateToAsl(text.trim(), controller.signal);
+      if (request.kind === "transcription") {
+        const transcript = await transcribeAudio(request.file, controller.signal);
+        if (controller.signal.aborted) return;
+        setText(transcript);
+        setTranscriptNotice("Transcript ready. Review and edit it before drafting ASL glosses.");
+        setStage("idle");
+        setTab("input");
+        return;
+      }
+      const output =
+        request.kind === "translation"
+          ? await translateText(request.text, controller.signal)
+          : await recognizeSignVideo(request.file, controller.signal);
       if (controller.signal.aborted) return;
+      setTranscriptNotice("");
       setResult(output);
       setStage("ready");
     } catch (err) {
@@ -66,13 +87,29 @@ export default function TranslatorApp() {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setStage("error");
     } finally {
-      if (abortRef.current === controller) stopTimer();
+      if (abortRef.current === controller) abortRef.current = null;
     }
+  }
+
+  function translate() {
+    void execute({ kind: "translation", text: text.trim() });
+  }
+
+  function transcribe(file: File) {
+    void execute({ kind: "transcription", file });
+  }
+
+  function recognize(file: File) {
+    void execute({ kind: "recognition", file });
+  }
+
+  function retry() {
+    if (lastRequestRef.current) void execute(lastRequestRef.current);
   }
 
   function cancel() {
     abortRef.current?.abort();
-    stopTimer();
+    abortRef.current = null;
     setStage("idle");
   }
 
@@ -121,6 +158,55 @@ export default function TranslatorApp() {
             </div>
           </div>
         )}
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">From speech to ASL gloss drafts.</h1>
+          <p className="muted mt-2">
+            Transcribe, draft a gloss sequence, inspect references, and preview the Raven rig.
+          </p>
+        </div>
+        <div
+          className="hidden items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm font-medium md:flex"
+          aria-label="ASL gloss draft pipeline"
+        >
+          <span className="brand-text">ASL draft · human review required</span>
+        </div>
+      </div>
+
+      <div role="tablist" aria-label="Workspace" className="seg mb-4 md:hidden">
+        <button type="button" role="tab" aria-selected={tab === "input"} onClick={() => setTab("input")}>
+          Input
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "preview"} onClick={() => setTab("preview")}>
+          Result
+        </button>
+      </div>
+
+      <div className="md:grid md:grid-cols-[320px_minmax(0,1fr)] md:items-start md:gap-5">
+        <div className={tab === "input" ? "" : "hidden md:block"}>
+          <InputCard
+            text={text}
+            onTextChange={setText}
+            busy={stage === "processing"}
+            onTranslate={translate}
+            onTranscribe={transcribe}
+            onRecognize={recognize}
+            transcriptNotice={transcriptNotice}
+          />
+        </div>
+        <div className={tab === "preview" ? "" : "hidden md:block"}>
+          <PreviewCard
+            stage={stage}
+            requestKind={requestKind}
+            result={result}
+            error={error}
+            reportOpen={reportOpen}
+            onCancel={cancel}
+            onRetry={retry}
+            onEdit={() => setTab("input")}
+            onReport={openReport}
+          />
+        </div>
       </div>
 
       <div className="mt-6">
