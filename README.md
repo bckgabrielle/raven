@@ -62,8 +62,7 @@ Raven does not redistribute the Kaggle images. Obtain them from Kaggle and revie
 The optional isolated-sign recognition, local reference video, and pose-extraction workflow is designed for [ASL Citizen](https://www.microsoft.com/en-us/research/project/asl-citizen/), a community-sourced isolated-sign dataset created by Microsoft Research and collaborators, with community contributors.
 
 Microsoft Research's [ASL Citizen Dataset License](https://www.microsoft.com/en-us/research/project/asl-citizen/dataset-license/) limits use of the materials, including data, to **non-commercial, non-revenue-generating research purposes**. It also restricts redistribution of the data and modifications to it. Do not commit the videos, splits, derived pose tracks, or other dataset materials to this repository or distribute them through Raven. Obtain the data from the official [Microsoft download page](https://www.microsoft.com/en-us/download/details.aspx?id=105253), read the current license and consent terms, and independently determine whether your intended use is permitted. Contact Microsoft as directed by its license for commercial-use questions.
-
-Please cite the [ASL Citizen paper](https://arxiv.org/abs/2304.05934) in research outputs:
+[ASL Citizen paper](https://arxiv.org/abs/2304.05934)
 
 > Desai, A. et al. “ASL Citizen: A Community-Sourced Dataset for Advancing Isolated Sign Language Recognition.” 2023. [arXiv:2304.05934](https://arxiv.org/abs/2304.05934).
 
