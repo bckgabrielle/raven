@@ -40,12 +40,12 @@ The second use case is not implemented as live speech-to-ASL translation. It wil
 
 ### Zetaris and Meterless
 
-Zetaris Lightning Catalog and Meterless Nightshift are optional backend integrations:
+Zetaris Lightning Catalog and Meterless Nightshift are optional backend integrations to running locally on your computer:
 
-- **Zetaris Lightning Catalog** can provide catalog search, exact gloss lookup, and pose-track metadata through the configurable backend REST adapter. Local CSV and pose-index data remain available as fallback.
-- **Meterless Nightshift** can provide unreviewed gloss drafts through its OpenAI-compatible chat-completions endpoint. Audio transcription continues to use Groq.
+- **Zetaris Lightning Catalog** provides catalog search, exact gloss lookup, and pose-track metadata through the configurable backend REST adapter. Local CSV and pose-index data remain available as fallback.
+- **Meterless Nightshift**  provides unreviewed gloss drafts through its OpenAI-compatible chat-completions endpoint. Audio transcription continues to use Groq.
 
-Both integrations are disabled unless configured. Their settings and expected response shapes are documented in [backend/README.md](./backend/README.md); neither performs pose extraction, model training, or avatar animation.
+Both integrations are disabled automatically unless configured. Their settings and response shapes are documented in [backend/README.md](./backend/README.md)
 
 ## Datasets and attribution
 
