@@ -1,5 +1,11 @@
 export const MAX_CHARS = 500;
 export const MAX_FILE_BYTES = 1024 * 1024; // 1 MB
+export const EXAMPLE_TEXT =
+  "Hello! My name is Maya. I’m learning ASL. It’s nice to meet you.";
+
+export function splitSentences(text: string): string[] {
+  return (text.match(/[^.!?]+[.!?]*/g) ?? []).map((s) => s.trim()).filter(Boolean);
+}
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 export const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 export const EXAMPLE_TEXT = "Hello, my name is Maya. I am learning ASL.";
@@ -13,6 +19,7 @@ export interface TextStatus {
 export function checkText(text: string): TextStatus {
   const trimmed = text.trim();
   if (!trimmed) {
+    return { ok: false, tone: "idle", message: "Type or paste some English to begin." };
     return { ok: false, tone: "idle", message: "Enter English text to create a gloss draft." };
   }
   if (text.length > MAX_CHARS) {
@@ -22,6 +29,11 @@ export function checkText(text: string): TextStatus {
       message: `Too long by ${text.length - MAX_CHARS} characters. The limit is ${MAX_CHARS}.`,
     };
   }
+  const n = splitSentences(trimmed).length;
+  return {
+    ok: true,
+    tone: "ok",
+    message: `Ready to translate · ${n} short sentence${n === 1 ? "" : "s"}`,
   return {
     ok: true,
     tone: "ok",

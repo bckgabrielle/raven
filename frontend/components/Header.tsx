@@ -2,9 +2,12 @@ const LETTERS = ["R", "A", "V", "E", "N"];
 
 export default function Header() {
   return (
-    <header className="border-b-4 border-[var(--accent)] bg-[var(--navy)] text-white">
+    <header className="site-header">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-7">
         <div className="flex items-center gap-3">
+          <span className="flex gap-1.5" role="img" aria-label="raven">
+            {LETTERS.map((letter) => (
+              <span key={letter} aria-hidden className="tile">
           <span className="flex gap-1" role="img" aria-label="raven">
             {LETTERS.map((letter) => (
               <span
@@ -16,6 +19,13 @@ export default function Header() {
               </span>
             ))}
           </span>
+          <span className="muted hidden border-l border-[var(--line-strong)] pl-3 text-sm md:inline">
+            English to ASL studio
+          </span>
+        </div>
+        <nav aria-label="Main" className="text-sm">
+          <a href="#top" aria-current="page" className="nav-link hidden sm:inline-block">
+            Translate
           <span className="hidden border-l border-white/30 pl-3 text-sm text-white/80 md:inline">
             ASL gloss studio
           </span>
@@ -28,12 +38,6 @@ export default function Header() {
           >
             Explore signs
           </a>
-          <a href="#about" className="hidden text-white/80 hover:underline sm:inline">
-            About Raven
-          </a>
-          <span className="rounded-full bg-[var(--accent)] px-3 py-0.5 text-xs font-semibold text-[var(--navy)]">
-            Research prototype
-          </span>
         </nav>
       </div>
     </header>
