@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import mimetypes
 import os
 import hashlib
 import logging
@@ -23,6 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from fastapi.responses import FileResponse
 
+<<<<<<< Updated upstream
 from .catalog import SignCatalog, ZetarisCatalog, read_pose_tracks
 from .data import sample_video
 from .model import TemporalSignClassifier
@@ -38,6 +40,9 @@ from .storage import Store
 logger = logging.getLogger(__name__)
 MAX_INTAKE_BYTES = 100 * 1024 * 1024
 ALLOWED_VIDEO_SUFFIXES = {".mp4", ".mov", ".webm"}
+=======
+from .alphabet_dataset import load_alphabet_samples
+>>>>>>> Stashed changes
 from .catalog import SignCatalog
 from .data import VideoRecord, sample_video
 from .groq_service import GroqServiceError, draft_glosses, is_configured, transcribe_audio
@@ -72,6 +77,7 @@ class Runtime:
         self.worker_stop = threading.Event()
         self.worker_thread: threading.Thread | None = None
         self.classes: list[str] = []
+        self.alphabet_samples: dict[str, list[Path]] = {}
         self.frame_count = 16
         self.image_size = 112
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -91,12 +97,17 @@ class Runtime:
 
         dataset_setting = os.getenv("ASL_DATASET_ROOT")
         checkpoint_setting = os.getenv("ASL_CHECKPOINT")
+<<<<<<< Updated upstream
         local_catalog: SignCatalog | None = None
+=======
+        alphabet_setting = os.getenv("ASL_ALPHABET_DATASET_ROOT")
+>>>>>>> Stashed changes
         if dataset_setting:
             self.dataset_root = Path(dataset_setting).expanduser().resolve()
             local_catalog = SignCatalog.from_csv(
                 self.dataset_root / "splits" / "train.csv"
             )
+<<<<<<< Updated upstream
         pose_setting = os.getenv("ASL_POSE_TRACKS_JSON")
         if pose_setting:
             self.pose_tracks_path = Path(pose_setting).expanduser().resolve()
@@ -109,6 +120,11 @@ class Runtime:
                 base_url=zetaris_url,
                 token=os.getenv("ZETARIS_API_TOKEN", "").strip(),
                 pose_tracks_path=self.pose_tracks_path,
+=======
+        if alphabet_setting:
+            self.alphabet_samples = load_alphabet_samples(
+                Path(alphabet_setting).expanduser().resolve()
+>>>>>>> Stashed changes
             )
         if checkpoint_setting:
             checkpoint_path = Path(checkpoint_setting).expanduser().resolve()
@@ -158,8 +174,12 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="Raven ASL Model API",
     version="0.1.0",
+<<<<<<< Updated upstream
     description="Persistent request orchestration, dataset intake, isolated-sign recognition, and reference lookup.",
     description="Speech transcription, unreviewed ASL gloss drafts, isolated-sign recognition, and local reference lookup.",
+=======
+    description="ASL alphabet image practice, speech transcription, unreviewed gloss drafts, isolated-sign recognition, and local references.",
+>>>>>>> Stashed changes
     lifespan=lifespan,
 )
 cors_origins = [
@@ -330,6 +350,7 @@ def health() -> dict[str, object]:
         "status": "ready" if runtime.model is not None else "model_not_loaded",
         "recognizer_loaded": runtime.model is not None,
         "reference_catalog_loaded": runtime.catalog is not None,
+<<<<<<< Updated upstream
         "model_version": runtime.model_version,
         "request_store": "ready" if runtime.store is not None else "not_loaded",
         "active_gloss_provider": integrations["active_gloss_provider"],
@@ -369,11 +390,16 @@ def create_signing_request(request: PlanRequest) -> dict[str, object]:
         "request_id": created["id"],
         "status": created["status"],
         "status_url": f"/v1/requests/{created['id']}",
+=======
+        "alphabet_dataset_loaded": bool(runtime.alphabet_samples),
+        "alphabet_letters_available": len(runtime.alphabet_samples),
+>>>>>>> Stashed changes
         "groq_configured": is_configured(),
         "model_version": "asl-citizen-video-gloss-v1",
     }
 
 
+<<<<<<< Updated upstream
 @app.get("/v1/requests/{request_id}")
 def get_signing_request(request_id: str) -> dict[str, object]:
     request = get_store().get_request(request_id)
@@ -422,6 +448,32 @@ def submit_result_feedback(
         raise HTTPException(status_code=404, detail="Signing result not found.")
     feedback_id = store.save_feedback(result_id, request.category, request.message)
     return {"feedback_id": feedback_id, "status": "received"}
+=======
+@app.get("/v1/alphabet")
+def get_alphabet_dataset() -> dict[str, object]:
+    letters = [
+        {"letter": letter, "sample_count": len(samples)}
+        for letter, samples in sorted(runtime.alphabet_samples.items())
+    ]
+    return {
+        "available": bool(letters),
+        "source": "chaitanyakakade77/american-sign-language-dataset",
+        "letters": letters,
+    }
+
+
+@app.get("/v1/alphabet/{letter}/samples/{sample_index}")
+def get_alphabet_sample(letter: str, sample_index: int) -> FileResponse:
+    normalized_letter = letter.upper()
+    if len(normalized_letter) != 1 or normalized_letter not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        raise HTTPException(status_code=404, detail="Alphabet sample not found.")
+    samples = runtime.alphabet_samples.get(normalized_letter)
+    if samples is None or sample_index < 0 or sample_index >= len(samples):
+        raise HTTPException(status_code=404, detail="Alphabet sample not found.")
+    sample_path = samples[sample_index]
+    media_type = mimetypes.guess_type(sample_path.name)[0] or "application/octet-stream"
+    return FileResponse(sample_path, media_type=media_type, filename=sample_path.name)
+>>>>>>> Stashed changes
 
 
 @app.get("/v1/signs")

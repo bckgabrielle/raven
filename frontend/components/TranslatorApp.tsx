@@ -7,6 +7,7 @@ import type { Stage, TranslationResult } from "@/lib/types";
 import { recognizeSignVideo, transcribeAudio, translateText } from "@/lib/api";
 import type { MobileTab, Stage, TranslationResult } from "@/lib/types";
 import Disclaimer from "./Disclaimer";
+import AlphabetPractice from "./AlphabetPractice";
 import InputCard from "./InputCard";
 import PreviewCard from "./PreviewCard";
 import ProviderStatus from "./ProviderStatus";
@@ -161,20 +162,34 @@ export default function TranslatorApp() {
         )}
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">From speech to ASL gloss drafts.</h1>
+          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+            Learn ASL, one sign at a time.
+          </h1>
           <p className="muted mt-2">
-            Transcribe, draft a gloss sequence, inspect references, and preview the Raven rig.
+            Practice the alphabet, explore recorded signs, and see how Raven&apos;s experimental
+            avatar pipeline works.
           </p>
         </div>
         <div
           className="hidden items-center gap-2 rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm font-medium md:flex"
-          aria-label="ASL gloss draft pipeline"
+          aria-label="ASL learning tools"
         >
-          <span className="brand-text">ASL draft · human review required</span>
+        <span className="brand-text">Practice · references · avatar</span>
         </div>
       </div>
 
+<<<<<<< Updated upstream
       <ProviderStatus />
+=======
+      <AlphabetPractice />
+
+      <div id="explore" className="mb-3">
+        <h2 className="text-xl font-semibold">Explore words and phrases</h2>
+        <p className="muted mt-1 text-sm">
+        Try the existing speech, gloss-reference, isolated-sign, and avatar tools.
+        </p>
+      </div>
+>>>>>>> Stashed changes
 
       <div role="tablist" aria-label="Workspace" className="seg mb-4 md:hidden">
         <button type="button" role="tab" aria-selected={tab === "input"} onClick={() => setTab("input")}>
