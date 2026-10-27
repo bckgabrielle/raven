@@ -16,7 +16,7 @@ interface BackendSequenceItem {
 interface BackendDraft {
   status: "draft";
   source_text: string;
-  translation_source: "groq_unreviewed" | "local_word_lookup";
+  translation_source: "groq_unreviewed" | "meterless_unreviewed" | "local_word_lookup";
   model_version: string;
   review_status: "unreviewed";
   glosses: string[];
@@ -53,6 +53,7 @@ function isBackendDraft(value: unknown): value is BackendDraft {
     plan.status === "draft" &&
     typeof plan.source_text === "string" &&
     (plan.translation_source === "groq_unreviewed" ||
+      plan.translation_source === "meterless_unreviewed" ||
       plan.translation_source === "local_word_lookup") &&
     typeof plan.model_version === "string" &&
     plan.review_status === "unreviewed" &&

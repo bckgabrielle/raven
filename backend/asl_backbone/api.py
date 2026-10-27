@@ -15,7 +15,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
-from typing import Any
 from urllib.parse import quote
 
 import torch
@@ -24,12 +23,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from fastapi.responses import FileResponse
 
-<<<<<<< Updated upstream
+from .alphabet_dataset import load_alphabet_samples
 from .catalog import SignCatalog, ZetarisCatalog, read_pose_tracks
-from .data import sample_video
+from .data import VideoRecord, sample_video
+from .groq_service import GroqServiceError, is_configured, transcribe_audio
 from .model import TemporalSignClassifier
+from .pose_tracks import load_pose_track, pose_track_path, pose_track_quality
 from .providers import (
     ProviderError,
+    ProviderSettings,
     active_provider_name,
     draft_glosses,
     provider_configuration,
@@ -37,17 +39,10 @@ from .providers import (
 )
 from .storage import Store
 
+
 logger = logging.getLogger(__name__)
 MAX_INTAKE_BYTES = 100 * 1024 * 1024
 ALLOWED_VIDEO_SUFFIXES = {".mp4", ".mov", ".webm"}
-=======
-from .alphabet_dataset import load_alphabet_samples
->>>>>>> Stashed changes
-from .catalog import SignCatalog
-from .data import VideoRecord, sample_video
-from .groq_service import GroqServiceError, draft_glosses, is_configured, transcribe_audio
-from .model import TemporalSignClassifier
-from .pose_tracks import load_pose_track, pose_track_path, pose_track_quality
 
 
 class PlanRequest(BaseModel):
@@ -61,6 +56,8 @@ class FeedbackRequest(BaseModel):
 
 class AssetReviewRequest(BaseModel):
     review_status: Literal["approved", "rejected", "pending"]
+
+
 class TranslationRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
 
@@ -97,17 +94,13 @@ class Runtime:
 
         dataset_setting = os.getenv("ASL_DATASET_ROOT")
         checkpoint_setting = os.getenv("ASL_CHECKPOINT")
-<<<<<<< Updated upstream
         local_catalog: SignCatalog | None = None
-=======
         alphabet_setting = os.getenv("ASL_ALPHABET_DATASET_ROOT")
->>>>>>> Stashed changes
         if dataset_setting:
             self.dataset_root = Path(dataset_setting).expanduser().resolve()
             local_catalog = SignCatalog.from_csv(
                 self.dataset_root / "splits" / "train.csv"
             )
-<<<<<<< Updated upstream
         pose_setting = os.getenv("ASL_POSE_TRACKS_JSON")
         if pose_setting:
             self.pose_tracks_path = Path(pose_setting).expanduser().resolve()
@@ -120,11 +113,10 @@ class Runtime:
                 base_url=zetaris_url,
                 token=os.getenv("ZETARIS_API_TOKEN", "").strip(),
                 pose_tracks_path=self.pose_tracks_path,
-=======
+            )
         if alphabet_setting:
             self.alphabet_samples = load_alphabet_samples(
                 Path(alphabet_setting).expanduser().resolve()
->>>>>>> Stashed changes
             )
         if checkpoint_setting:
             checkpoint_path = Path(checkpoint_setting).expanduser().resolve()
@@ -174,12 +166,10 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="Raven ASL Model API",
     version="0.1.0",
-<<<<<<< Updated upstream
-    description="Persistent request orchestration, dataset intake, isolated-sign recognition, and reference lookup.",
-    description="Speech transcription, unreviewed ASL gloss drafts, isolated-sign recognition, and local reference lookup.",
-=======
-    description="ASL alphabet image practice, speech transcription, unreviewed gloss drafts, isolated-sign recognition, and local references.",
->>>>>>> Stashed changes
+    description=(
+        "Persistent signing requests, dataset intake, ASL alphabet practice, speech "
+        "transcription, unreviewed gloss drafts, isolated-sign recognition, and references."
+    ),
     lifespan=lifespan,
 )
 cors_origins = [
@@ -350,12 +340,14 @@ def health() -> dict[str, object]:
         "status": "ready" if runtime.model is not None else "model_not_loaded",
         "recognizer_loaded": runtime.model is not None,
         "reference_catalog_loaded": runtime.catalog is not None,
-<<<<<<< Updated upstream
         "model_version": runtime.model_version,
         "request_store": "ready" if runtime.store is not None else "not_loaded",
         "active_gloss_provider": integrations["active_gloss_provider"],
         "providers": integrations["providers"],
         "zetaris": integrations["zetaris"],
+        "alphabet_dataset_loaded": bool(runtime.alphabet_samples),
+        "alphabet_letters_available": len(runtime.alphabet_samples),
+        "groq_configured": is_configured(),
     }
 
 
@@ -390,16 +382,9 @@ def create_signing_request(request: PlanRequest) -> dict[str, object]:
         "request_id": created["id"],
         "status": created["status"],
         "status_url": f"/v1/requests/{created['id']}",
-=======
-        "alphabet_dataset_loaded": bool(runtime.alphabet_samples),
-        "alphabet_letters_available": len(runtime.alphabet_samples),
->>>>>>> Stashed changes
-        "groq_configured": is_configured(),
-        "model_version": "asl-citizen-video-gloss-v1",
     }
 
 
-<<<<<<< Updated upstream
 @app.get("/v1/requests/{request_id}")
 def get_signing_request(request_id: str) -> dict[str, object]:
     request = get_store().get_request(request_id)
@@ -448,7 +433,8 @@ def submit_result_feedback(
         raise HTTPException(status_code=404, detail="Signing result not found.")
     feedback_id = store.save_feedback(result_id, request.category, request.message)
     return {"feedback_id": feedback_id, "status": "received"}
-=======
+
+
 @app.get("/v1/alphabet")
 def get_alphabet_dataset() -> dict[str, object]:
     letters = [
@@ -473,7 +459,6 @@ def get_alphabet_sample(letter: str, sample_index: int) -> FileResponse:
     sample_path = samples[sample_index]
     media_type = mimetypes.guess_type(sample_path.name)[0] or "application/octet-stream"
     return FileResponse(sample_path, media_type=media_type, filename=sample_path.name)
->>>>>>> Stashed changes
 
 
 @app.get("/v1/signs")
@@ -498,6 +483,9 @@ def create_reference_plan(request: PlanRequest) -> dict[str, object]:
             "unsupported_text": request.text,
             "warning": "Only exact single-gloss reference lookup is available; this is not English-to-ASL translation.",
         }
+
+    for item in sequence:
+        item["pose_url"] = _pose_url_for_gloss(str(item["gloss"]))
 
     return {
         "status": "unreviewed_draft" if draft_provider else "reference_only",
@@ -530,23 +518,11 @@ def list_video_pose_tracks(video_id: str) -> dict[str, object]:
         "video_id": video_id,
         "pose_tracks": tracks,
         "source": "zetaris" if remote else "local",
-        "sequence": [
-            {
-                "index": 0,
-                "gloss": record.gloss,
-                "asl_lex_code": record.asl_lex_code,
-                "video_id": record.video_file,
-                "video_url": f"/v1/videos/{record.video_file}",
-                "pose_url": _pose_url_for_gloss(record.gloss),
-            }
-        ],
-        "motion_data": None,
-        "warning": "This is one recorded example, not a grammatical sentence translation; avatar playback requires an extracted local pose track.",
     }
 
 
 def _reference_for_gloss(gloss: str) -> dict[str, str] | None:
-    if runtime.catalog is None or runtime.dataset_root is None:
+    if runtime.catalog is None:
         return None
     matches = runtime.catalog.lookup(gloss)
     if not matches:
@@ -607,41 +583,21 @@ async def translate_text(request: TranslationRequest) -> dict[str, object]:
         "Dataset examples are isolated signs; avatar playback is available only for locally extracted pose tracks and does not validate sentence grammar.",
     ]
     translation_source = "local_word_lookup"
+    model_version = "local-word-lookup-v1"
+    local_unsupported: list[str] | None = None
     try:
-        if not is_configured():
-            raise GroqServiceError("Groq is not configured.")
-        proposed_glosses = await draft_glosses(request.text)
-        translation_source = "groq_unreviewed"
-    except GroqServiceError as error:
+        settings = ProviderSettings.from_env()
+        proposed_glosses = draft_glosses(request.text).glosses
+        translation_source = f"{settings.provider}_unreviewed"
+        model_version = settings.model
+    except (ProviderError, ValueError) as error:
         proposed_glosses, local_unsupported = _local_word_lookup(request.text)
         warnings.append(
-            f"Groq gloss drafting was unavailable ({error}); local word lookup is not translation."
+            f"Gloss drafting was unavailable ({error}); local word lookup is not translation."
         )
-        sequence = []
-        for gloss in proposed_glosses:
-            reference = _reference_for_gloss(gloss)
-            sequence.append(
-                {
-                    "gloss": gloss,
-                    "supported": reference is not None,
-                    "reference": reference,
-                    "pose_url": _pose_url_for_gloss(gloss),
-                }
-            )
-        return {
-            "status": "draft",
-            "source_text": request.text,
-            "translation_source": translation_source,
-            "model_version": "local-word-lookup-v1",
-            "review_status": "unreviewed",
-            "glosses": proposed_glosses,
-            "sequence": sequence,
-            "unsupported_glosses": local_unsupported,
-            "warnings": warnings,
-        }
 
     sequence = []
-    unsupported_glosses = []
+    unsupported_glosses = local_unsupported or []
     for gloss in proposed_glosses:
         reference = _reference_for_gloss(gloss)
         sequence.append(
@@ -652,14 +608,14 @@ async def translate_text(request: TranslationRequest) -> dict[str, object]:
                 "pose_url": _pose_url_for_gloss(gloss),
             }
         )
-        if reference is None:
+        if reference is None and local_unsupported is None:
             unsupported_glosses.append(gloss)
 
     return {
         "status": "draft",
         "source_text": request.text,
         "translation_source": translation_source,
-        "model_version": os.getenv("GROQ_CHAT_MODEL", "llama-3.3-70b-versatile"),
+        "model_version": model_version,
         "review_status": "unreviewed",
         "glosses": proposed_glosses,
         "sequence": sequence,

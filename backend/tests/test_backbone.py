@@ -8,14 +8,14 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import torch
 
 from asl_backbone import api, groq_service
 from asl_backbone.alphabet_dataset import load_alphabet_samples
 from asl_backbone.catalog import SignCatalog
-from asl_backbone.data import normalize_gloss, read_split
+from asl_backbone.data import VideoRecord, normalize_gloss, read_split
 from asl_backbone.model import TemporalSignClassifier
 from asl_backbone.pose_tracks import (
     fill_short_landmark_gaps,
@@ -24,6 +24,7 @@ from asl_backbone.pose_tracks import (
     pose_track_quality,
     _recover_missing_hands,
 )
+from asl_backbone.providers import GlossDraft
 
 
 class DatasetTests(unittest.TestCase):
@@ -93,6 +94,15 @@ class DatasetTests(unittest.TestCase):
         self.assertEqual(catalog.lookup("not-mind")[0].gloss, "NOT MIND")
         self.assertEqual(catalog.search("mind"), ["NOT MIND"])
         self.assertEqual(catalog.find_video("clip.mp4").gloss, "NOT MIND")
+
+    def test_reference_lookup_works_without_a_local_dataset_root(self) -> None:
+        catalog = SignCatalog([VideoRecord("P1", "hello.mp4", "HELLO", "G_001")])
+        with patch.object(api.runtime, "catalog", catalog), patch.object(
+            api.runtime, "dataset_root", None
+        ):
+            reference = api._reference_for_gloss("HELLO")
+
+        self.assertEqual(reference["video_id"], "hello.mp4")
 
     def test_gloss_normalization(self) -> None:
         self.assertEqual(normalize_gloss("Not Mind!"), "NOTMIND")
@@ -208,8 +218,12 @@ class PoseTrackTests(unittest.TestCase):
             )
             with patch.object(api.runtime, "catalog", catalog), patch.object(
                 api.runtime, "dataset_root", root
-            ), patch.object(api, "is_configured", return_value=True), patch.object(
-                api, "draft_glosses", new=AsyncMock(return_value=["APPLE"])
+            ), patch.dict(
+                os.environ,
+                {"LLM_PROVIDER": "groq", "GROQ_API_KEY": "test-token"},
+                clear=True,
+            ), patch.object(
+                api, "draft_glosses", return_value=GlossDraft(glosses=["APPLE"])
             ):
                 response = asyncio.run(
                     api.translate_text(api.TranslationRequest(text="I like apples"))
@@ -345,7 +359,7 @@ class GroqIntegrationTests(unittest.TestCase):
         self.assertTrue(client.url.endswith("/audio/transcriptions"))
         self.assertEqual(client.kwargs["headers"]["Authorization"], "Bearer test-key")
 
-    def test_groq_draft_includes_reference_and_review_status(self) -> None:
+    def test_meterless_draft_includes_reference_and_review_status(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "train.csv"
             path.write_text(
@@ -356,16 +370,26 @@ class GroqIntegrationTests(unittest.TestCase):
             catalog = SignCatalog.from_csv(path)
             with patch.object(api.runtime, "catalog", catalog), patch.object(
                 api.runtime, "dataset_root", Path(directory)
-            ), patch.object(api, "is_configured", return_value=True), patch.object(
-                api, "draft_glosses", new=AsyncMock(return_value=["APPLE", "UNKNOWN"])
+            ), patch.dict(
+                os.environ,
+                {
+                    "LLM_PROVIDER": "meterless",
+                    "METERLESS_API_TOKEN": "test-token",
+                    "METERLESS_MODEL": "nightshift",
+                },
+                clear=True,
+            ), patch.object(
+                api,
+                "draft_glosses",
+                return_value=GlossDraft(glosses=["APPLE", "UNKNOWN"]),
             ):
                 response = asyncio.run(
                     api.translate_text(api.TranslationRequest(text="I like apples"))
                 )
 
-        self.assertEqual(response["translation_source"], "groq_unreviewed")
+        self.assertEqual(response["translation_source"], "meterless_unreviewed")
         self.assertEqual(response["review_status"], "unreviewed")
-        self.assertEqual(response["model_version"], "llama-3.3-70b-versatile")
+        self.assertEqual(response["model_version"], "nightshift")
         self.assertEqual(response["unsupported_glosses"], ["UNKNOWN"])
         self.assertEqual(response["sequence"][0]["reference"]["video_id"], "apple.mp4")
 
@@ -380,7 +404,11 @@ class GroqIntegrationTests(unittest.TestCase):
             catalog = SignCatalog.from_csv(path)
             with patch.object(api.runtime, "catalog", catalog), patch.object(
                 api.runtime, "dataset_root", Path(directory)
-            ), patch.object(api, "is_configured", return_value=False):
+            ), patch.dict(
+                os.environ,
+                {"LLM_PROVIDER": "meterless"},
+                clear=True,
+            ):
                 response = asyncio.run(api.translate_text(api.TranslationRequest(text="APPLE unknown")))
 
         self.assertEqual(response["translation_source"], "local_word_lookup")

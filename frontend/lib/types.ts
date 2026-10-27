@@ -1,11 +1,3 @@
-export type MobileTab = "input" | "preview";
-
-export type Stage = "idle" | "processing" | "ready" | "error";
-
-export type IssueCategory = "fingerspelling" | "sign" | "timing" | "unsupported" | "playback";
-
-export interface GlossEntry {
-  index: number;
 export type Stage = "idle" | "processing" | "ready" | "error";
 export type MobileTab = "input" | "preview";
 export type IssueCategory =
@@ -15,16 +7,6 @@ export type IssueCategory =
   | "unsupported"
   | "playback";
 
-// Shape the back end should return from POST /api/translate.
-// Confirm the final contract with Mitchelle and Hadassah.
-export interface TranslationResult {
-  text: string;
-  durationSec: number;
-  modelVersion: string;
-  fingerspelled: string[];
-  unsupported: string[];
-}
-
 export interface SignReference {
   gloss: string;
   aslLexCode: string;
@@ -32,18 +14,6 @@ export interface SignReference {
   videoUrl: string;
 }
 
-export interface TranslationResult {
-  id: string;
-  text: string;
-  modelVersion: string;
-  durationSec: number;
-  fingerspelled: string[];
-  unsupported: string[];
-  glossProvider: string;
-  draftStatus: "unreviewed" | "not_created";
-  warning: string | null;
-  sequence: GlossEntry[];
-  supported: boolean;
 export interface DraftSequenceItem {
   gloss: string;
   supported: boolean;
@@ -55,7 +25,10 @@ export interface TranslationDraft {
   kind: "translation";
   status: "draft";
   text: string;
-  translationSource: "groq_unreviewed" | "local_word_lookup";
+  translationSource:
+    | "groq_unreviewed"
+    | "meterless_unreviewed"
+    | "local_word_lookup";
   reviewStatus: "unreviewed";
   modelVersion: string;
   glosses: string[];
@@ -84,7 +57,5 @@ export interface FeedbackReport {
   details: string;
   playbackTimeSec: number;
   modelVersion: string;
-  englishText?: string; // only sent when the user ticks "include my text"
-}
   englishText?: string;
 }

@@ -18,60 +18,6 @@ interface Props {
   onReport: (timeSec: number) => void;
 }
 
-function AvatarStage({
-  playing,
-  time,
-  name,
-  onToggle,
-}: {
-  playing: boolean;
-  time: number;
-  name?: string;
-  onToggle: () => void;
-}) {
-  const letters = name ? name.toUpperCase().split("") : [];
-  const active = playing ? Math.floor(time * 2) % Math.max(letters.length, 1) : -1;
-  return (
-    <div className="stage-wrap">
-      <div role="img" aria-label="Sign language avatar placeholder" className="stage" data-playing={playing}>
-        <span className="chip stage-chip absolute left-3 top-3">AI avatar · Demo animation</span>
-        <div className="text-center">
-          <span className={`inline-block text-6xl ${playing ? "wave" : ""}`} aria-hidden>
-            🤟
-          </span>
-          <p className="mt-2 text-sm font-semibold">{playing ? "Signing…" : "Avatar placeholder"}</p>
-          <p className="text-xs opacity-80">The model’s motion output will render here.</p>
-        </div>
-        {letters.length > 0 && (
-          <div className="absolute bottom-2 left-0 right-0 flex items-center justify-center gap-1.5">
-            <span className="mr-1 text-xs opacity-80">Fingerspelling</span>
-            {letters.map((letter, i) => (
-              <span key={i} className="spell" data-active={i === active}>
-                {letter}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-      {/* Mouse shortcut: click the stage to play or pause. It is kept out of the tab order
-          (the Play button below is the keyboard control) and never takes focus, so the
-          Space shortcut can't fire twice. */}
-      <button
-        type="button"
-        className="stage-toggle"
-        tabIndex={-1}
-        aria-hidden
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={onToggle}
-      >
-        <span className="stage-toggle__icon">
-          {playing ? <Pause size={18} aria-hidden /> : <Play size={18} aria-hidden />}
-        </span>
-      </button>
-    </div>
-  );
-}
-
 export default function PreviewCard(p: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -87,31 +33,16 @@ export default function PreviewCard(p: Props) {
   return (
     <section className="card" aria-labelledby="preview-title">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 id="preview-title" className="card-title">
-          <span className="step-num" aria-hidden>
-            2
-          </span>
-          Your ASL preview
         <h2 id="preview-title" className="text-lg font-semibold">
-          Sign references and avatar
+          ASL draft and avatar
         </h2>
         {chip}
       </div>
 
       {p.stage === "idle" && (
-        <div className="panel-soft grid place-items-center px-6 py-16 text-center">
-          <span
-            className="grid h-16 w-16 place-items-center rounded-full bg-[var(--surface)] text-4xl shadow-[3px_3px_0_var(--sand-deep)]"
-            aria-hidden
-          >
-            <span className="wave">🤟</span>
-          </span>
-          <p className="display mt-4 text-lg">Your ASL preview will appear here</p>
-          <p className="muted mt-1 max-w-xs text-sm leading-relaxed">
-            Add English on the left, then choose Translate to ASL.
         <div className="grid place-items-center rounded-xl bg-[#f3f7fe] px-6 py-16 text-center">
           <span className="text-4xl" aria-hidden>🤟</span>
-          <p className="mt-3 font-medium">Your sign exploration will appear here</p>
+          <p className="mt-3 font-medium">Your gloss draft will appear here</p>
           <p className="muted mt-1 max-w-xs text-sm">
             Enter or transcribe English, then review the suggested ASL gloss sequence.
           </p>
@@ -120,9 +51,6 @@ export default function PreviewCard(p: Props) {
 
       {p.stage === "processing" && (
         <>
-          <ProcessingSteps step={p.step} />
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="muted text-sm">Your English text is kept if you cancel.</p>
           <ProcessingSteps requestKind={p.requestKind} />
           <div className="mt-4 flex items-center justify-between gap-3">
             <p className="muted text-sm">Cancel to stop the current request.</p>
@@ -148,7 +76,6 @@ export default function PreviewCard(p: Props) {
 
       {p.stage === "ready" && p.result && (
         <>
-          <AvatarStage playing={pb.playing} time={pb.time} name={names[0]} onToggle={pb.toggle} />
           {p.result.kind === "translation" ? (
             <>
               <div className="rounded-xl bg-[#f3f7fe] p-4">
@@ -162,7 +89,11 @@ export default function PreviewCard(p: Props) {
                 <div className="flex items-center justify-between gap-2">
                   <h3 id="gloss-title" className="font-semibold">Suggested ASL gloss order</h3>
                   <span className="chip chip-warn">
-                    {p.result.translationSource === "groq_unreviewed" ? "Groq draft" : "Local fallback"}
+                    {p.result.translationSource === "groq_unreviewed"
+                      ? "Groq draft"
+                      : p.result.translationSource === "meterless_unreviewed"
+                        ? "Meterless draft"
+                        : "Local fallback"}
                   </span>
                 </div>
                 {p.result.glosses.length > 0 ? (
@@ -300,7 +231,7 @@ export default function PreviewCard(p: Props) {
             </div>
           )}
 
-          <div className="panel-soft mt-4 p-3 md:hidden">
+          <div className="mt-4 rounded-xl border border-[var(--line)] p-3 md:hidden">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold">Submitted input</span>
               <button type="button" className="btn-link text-xs" onClick={p.onEdit}>
@@ -317,17 +248,6 @@ export default function PreviewCard(p: Props) {
                 <span className="muted text-xs">{p.result.modelVersion}</span>
               )}
             </div>
-            {names.length > 0 && (
-              <p className="muted mt-2 leading-relaxed">
-                {names.map((n) => `“${n}”`).join(", ")} {names.length === 1 ? "is" : "are"} marked for
-                fingerspelling. Names, timing, and facial expression may need review.
-              </p>
-            )}
-            {unsupported.length > 0 && (
-              <p className="alert alert-warn mt-2">
-                These phrases may not be supported yet: {unsupported.join(", ")}.
-              </p>
-            )}
             <div className="mt-3 flex items-center justify-between gap-3">
               <span className="muted">Something look off?</span>
               <button

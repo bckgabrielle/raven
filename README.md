@@ -11,9 +11,9 @@ The avatar is the center of the product experience. Today, Raven can preview its
 ## What Raven can do today
 
 - Practice ASL fingerspelling using optional static alphabet images from a Kaggle dataset.
-- Enter English text or upload a text file and request an unreviewed ASL gloss draft through the configured Groq service.
+- Enter English text or upload a text file and request an unreviewed ASL gloss draft through the configured Groq or Meterless provider.
 - Record or upload audio for Groq transcription, then review the transcript before continuing.
-- Fall back to exact local gloss lookup if Groq gloss generation is unavailable. This is not translation.
+- Fall back to exact local gloss lookup if the selected gloss provider is unavailable. This is not translation.
 - Find matching isolated ASL-Citizen reference videos when the local dataset is configured.
 - Extract body and hand landmarks locally from selected ASL-Citizen videos and experimentally retarget available pose tracks to the Raven avatar.
 - Preview the Jack and Jill Blender rigs and experimental hand-keyed `HELLO` and `THANK-YOU` gestures.
@@ -32,7 +32,7 @@ The second use case is not implemented as live speech-to-ASL translation. It wil
 |---|---|---|
 | Web application | Next.js, React, TypeScript | User interface and same-origin API proxies. |
 | Backend API | Python, FastAPI, Pydantic | Local service for dataset lookup, pose and alphabet samples, transcription, gloss drafting, and optional sign recognition. |
-| Language and speech services | Groq API | Optional audio transcription and unreviewed gloss drafting. Requests require user consent in the UI. |
+| Language and speech services | Groq API, Meterless Nightshift | Groq supports optional audio transcription and gloss drafting; Meterless is an optional OpenAI-compatible gloss-drafting provider. |
 | Video recognition | PyTorch, OpenCV | CNN + GRU isolated-sign classifier code; a trained checkpoint is optional and is not included. |
 | Pose extraction | MediaPipe Holistic | Local extraction of body and hand landmarks from ASL-Citizen videos. |
 | 3D avatar | Blender, exported GLB rigs, Three.js | Jack/Jill rig assets and experimental browser preview/pose retargeting. |
@@ -40,12 +40,12 @@ The second use case is not implemented as live speech-to-ASL translation. It wil
 
 ### Zetaris and Meterless
 
-Zetaris Lightning Catalog and Meterless Nightshift have been considered as possible supporting technologies, but **neither is integrated into Raven**:
+Zetaris Lightning Catalog and Meterless Nightshift are optional backend integrations:
 
-- **Zetaris Lightning Catalog** is a data catalog/federation platform. Raven currently reads its local CSV/pose files directly; no Zetaris instance or connection is required.
-- **Meterless Nightshift** may provide a local model-serving/runtime option on compatible hardware. Raven currently uses its Groq integration for configured transcription and gloss drafting; it does not send requests to Nightshift.
+- **Zetaris Lightning Catalog** can provide catalog search, exact gloss lookup, and pose-track metadata through the configurable backend REST adapter. Local CSV and pose-index data remain available as fallback.
+- **Meterless Nightshift** can provide unreviewed gloss drafts through its OpenAI-compatible chat-completions endpoint. Audio transcription continues to use Groq.
 
-Installing either product does not change Raven's behavior. Treat both as future evaluation options, not current Raven dependencies or capabilities.
+Both integrations are disabled unless configured. Their settings and expected response shapes are documented in [backend/README.md](./backend/README.md); neither performs pose extraction, model training, or avatar animation.
 
 ## Datasets and attribution
 
@@ -89,7 +89,9 @@ for local configuration and keep real credentials and data files untracked.
 - Node.js 20.9 or later and npm.
 - Optional: ASL Citizen files, obtained under the dataset's terms.
 - Optional: Kaggle access and authentication to download the alphabet images.
-- Optional: a Groq API key for transcription and gloss drafting.
+- Optional: a Groq API key for audio transcription and, when selected, gloss drafting.
+- Optional: a Meterless API token and endpoint when using Meterless for gloss drafting.
+- Optional: a Zetaris endpoint and token for remote catalog metadata.
 - Optional: a compatible trained checkpoint for isolated-sign recognition.
 - Optional: Blender to edit or re-export the included rigs.
 
@@ -102,4 +104,3 @@ ASL is a full language, not English represented word-for-word with signs. Signin
 ## Project license
 
 Original Raven code in this repository is made available under the [MIT License](./LICENSE). This license does **not** apply to datasets, third-party libraries, fonts, or avatar/Blender assets unless their respective owners separately grant those rights. In particular, ASL Citizen remains subject to Microsoft's research license and use restrictions; the Kaggle alphabet dataset remains subject to its dataset license. See [LICENSE](./LICENSE) and the dataset terms above.
-
