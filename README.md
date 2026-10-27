@@ -46,3 +46,12 @@ video-sign recognition, feedback intake, and authenticated local dataset
 intake/review with consent/licence metadata and hashed manifests. It does not
 yet translate English sentences, generate motion, or run landmark ETL. See
 [backend/README.md](./backend/README.md) for setup, API routes, and limitations.
+
+Gloss drafting can optionally use Groq or a local Meterless Nightshift
+OpenAI-compatible endpoint. Drafts are validated against the catalog and remain
+unreviewed; provider failures fall back to local exact-gloss lookup. Zetaris
+Lightning Catalog can optionally serve catalog metadata through the configurable
+REST contract documented in [backend/README.md](./backend/README.md); local CSV
+and pose-track JSON files remain the fallback. Neither integration is used for
+MediaPipe extraction, model training, or avatar animation. Copy [.env.example](./.env.example)
+for local configuration and keep real credentials and data files untracked.

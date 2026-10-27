@@ -16,12 +16,20 @@ from urllib.parse import urlparse
 
 import torch
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from fastapi.responses import FileResponse
 
-from .catalog import SignCatalog
+from .catalog import SignCatalog, ZetarisCatalog, read_pose_tracks
 from .data import sample_video
 from .model import TemporalSignClassifier
+from .providers import (
+    ProviderError,
+    active_provider_name,
+    draft_glosses,
+    provider_configuration,
+    reported_provider_name,
+)
 from .storage import Store
 
 logger = logging.getLogger(__name__)
@@ -45,7 +53,8 @@ class AssetReviewRequest(BaseModel):
 class Runtime:
     def __init__(self) -> None:
         self.dataset_root: Path | None = None
-        self.catalog: SignCatalog | None = None
+        self.catalog: SignCatalog | ZetarisCatalog | None = None
+        self.pose_tracks_path: Path | None = None
         self.model: TemporalSignClassifier | None = None
         self.model_version = "asl-citizen-video-gloss-v1"
         self.store: Store | None = None
@@ -72,10 +81,24 @@ class Runtime:
 
         dataset_setting = os.getenv("ASL_DATASET_ROOT")
         checkpoint_setting = os.getenv("ASL_CHECKPOINT")
+        local_catalog: SignCatalog | None = None
         if dataset_setting:
             self.dataset_root = Path(dataset_setting).expanduser().resolve()
-            self.catalog = SignCatalog.from_csv(
+            local_catalog = SignCatalog.from_csv(
                 self.dataset_root / "splits" / "train.csv"
+            )
+        pose_setting = os.getenv("ASL_POSE_TRACKS_JSON")
+        if pose_setting:
+            self.pose_tracks_path = Path(pose_setting).expanduser().resolve()
+        elif self.dataset_root is not None:
+            self.pose_tracks_path = self.dataset_root / "pose_tracks" / "index.json"
+        zetaris_url = os.getenv("ZETARIS_BASE_URL", "").strip()
+        if local_catalog is not None or zetaris_url:
+            self.catalog = ZetarisCatalog(
+                local_catalog=local_catalog,
+                base_url=zetaris_url,
+                token=os.getenv("ZETARIS_API_TOKEN", "").strip(),
+                pose_tracks_path=self.pose_tracks_path,
             )
         if checkpoint_setting:
             checkpoint_path = Path(checkpoint_setting).expanduser().resolve()
@@ -128,6 +151,20 @@ app = FastAPI(
     description="Persistent request orchestration, dataset intake, isolated-sign recognition, and reference lookup.",
     lifespan=lifespan,
 )
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "RAVEN_CORS_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000",
+    ).split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Admin-Token"],
+)
 
 
 def get_store() -> Store:
@@ -166,9 +203,55 @@ def _normalize_text(text: str) -> str:
     return " ".join(text.split())
 
 
-def _make_reference_result(request: dict[str, Any]) -> dict[str, Any]:
-    matches = runtime.catalog.lookup(request["normalized_text"]) if runtime.catalog else []
+def _reference_sequence(text: str) -> tuple[list[dict[str, object]], str | None]:
+    if runtime.catalog is None:
+        return [], None
+
+    try:
+        provider_name = active_provider_name()
+        draft = draft_glosses(text)
+        sequence: list[dict[str, object]] = []
+        for index, gloss in enumerate(draft.glosses):
+            records = runtime.catalog.lookup(gloss)
+            if not records:
+                raise ProviderError(
+                    f"The {provider_name} gloss draft included an unknown catalog gloss."
+                )
+            record = records[0]
+            sequence.append(
+                {
+                    "index": index,
+                    "gloss": record.gloss,
+                    "asl_lex_code": record.asl_lex_code,
+                    "video_id": record.video_file,
+                    "video_url": f"/v1/videos/{record.video_file}",
+                }
+            )
+        return sequence, provider_name
+    except (ProviderError, ValueError) as error:
+        logger.warning("Gloss drafting unavailable; falling back to exact local lookup: %s", error)
+
+    matches = runtime.catalog.lookup(text)
     if not matches:
+        return [], None
+    record = matches[0]
+    return (
+        [
+            {
+                "index": 0,
+                "gloss": record.gloss,
+                "asl_lex_code": record.asl_lex_code,
+                "video_id": record.video_file,
+                "video_url": f"/v1/videos/{record.video_file}",
+            }
+        ],
+        None,
+    )
+
+
+def _make_reference_result(request: dict[str, Any]) -> dict[str, Any]:
+    sequence, draft_provider = _reference_sequence(request["normalized_text"])
+    if not sequence:
         warning = (
             "The isolated-sign reference catalog is unavailable."
             if runtime.catalog is None
@@ -185,30 +268,31 @@ def _make_reference_result(request: dict[str, Any]) -> dict[str, Any]:
             "model_version": runtime.model_version,
             "sequence": [],
             "motion_data": None,
+            "gloss_provider": reported_provider_name(),
+            "draft_status": "not_created",
             "warning": warning,
         }
 
-    record = matches[0]
+    is_draft = draft_provider is not None
     return {
         "schema_version": "1.0",
         "request_id": request["id"],
         "source_text": request["source_text"],
-        "status": "reference_only",
+        "status": "unreviewed_draft" if is_draft else "reference_only",
         "supported": True,
-        "plan_version": "reference-plan-v1",
+        "plan_version": "gloss-draft-v1" if is_draft else "reference-plan-v1",
         "motion_data_version": None,
         "model_version": runtime.model_version,
-        "sequence": [
-            {
-                "index": 0,
-                "gloss": record.gloss,
-                "asl_lex_code": record.asl_lex_code,
-                "video_id": record.video_file,
-                "video_url": f"/v1/videos/{record.video_file}",
-            }
-        ],
+        "sequence": sequence,
         "motion_data": None,
-        "warning": "This is one recorded example, not a grammatical sentence translation or avatar motion track.",
+        "gloss_provider": draft_provider or "local_exact_lookup",
+        "draft_status": "unreviewed" if is_draft else "not_created",
+        "warning": (
+            "This AI gloss draft is unreviewed and may be inaccurate; it is not a grammatical "
+            "sentence translation or avatar motion track."
+            if is_draft
+            else "This is one recorded example, not a grammatical sentence translation or avatar motion track."
+        ),
     }
 
 
@@ -230,12 +314,37 @@ def _process_signing_request(request_id: str) -> None:
 
 @app.get("/v1/health")
 def health() -> dict[str, object]:
+    integrations = provider_status()
     return {
         "status": "ready" if runtime.model is not None else "model_not_loaded",
         "recognizer_loaded": runtime.model is not None,
         "reference_catalog_loaded": runtime.catalog is not None,
         "model_version": runtime.model_version,
         "request_store": "ready" if runtime.store is not None else "not_loaded",
+        "active_gloss_provider": integrations["active_gloss_provider"],
+        "providers": integrations["providers"],
+        "zetaris": integrations["zetaris"],
+    }
+
+
+@app.get("/v1/provider-status")
+def provider_status() -> dict[str, object]:
+    configuration = provider_configuration()
+    catalog = runtime.catalog
+    zetaris_configured = bool(os.getenv("ZETARIS_BASE_URL", "").strip())
+    zetaris_available = (
+        catalog.available if isinstance(catalog, ZetarisCatalog) and zetaris_configured else None
+    )
+    return {
+        "active_gloss_provider": configuration["active"],
+        "providers": {
+            "groq": configuration["groq"],
+            "meterless": configuration["meterless"],
+        },
+        "zetaris": {
+            "configured": zetaris_configured,
+            "available": zetaris_available,
+        },
     }
 
 
@@ -314,8 +423,8 @@ def create_reference_plan(request: PlanRequest) -> dict[str, object]:
     if runtime.catalog is None:
         raise HTTPException(status_code=503, detail="Set ASL_DATASET_ROOT to enable reference lookup.")
 
-    matches = runtime.catalog.lookup(request.text)
-    if not matches:
+    sequence, draft_provider = _reference_sequence(request.text)
+    if not sequence:
         return {
             "status": "unsupported",
             "supported": False,
@@ -325,22 +434,37 @@ def create_reference_plan(request: PlanRequest) -> dict[str, object]:
             "warning": "Only exact single-gloss reference lookup is available; this is not English-to-ASL translation.",
         }
 
-    record = matches[0]
     return {
-        "status": "reference_only",
+        "status": "unreviewed_draft" if draft_provider else "reference_only",
         "supported": True,
         "source_text": request.text,
-        "sequence": [
-            {
-                "index": 0,
-                "gloss": record.gloss,
-                "asl_lex_code": record.asl_lex_code,
-                "video_id": record.video_file,
-                "video_url": f"/v1/videos/{record.video_file}",
-            }
-        ],
+        "sequence": sequence,
         "motion_data": None,
-        "warning": "This is one recorded example, not a grammatical sentence translation or avatar motion track.",
+        "gloss_provider": draft_provider or "local_exact_lookup",
+        "draft_status": "unreviewed" if draft_provider else "not_created",
+        "warning": (
+            "This AI gloss draft is unreviewed and may be inaccurate; it is not a grammatical "
+            "sentence translation or avatar motion track."
+            if draft_provider
+            else "This is one recorded example, not a grammatical sentence translation or avatar motion track."
+        ),
+    }
+
+
+@app.get("/v1/catalog/videos/{video_id}/pose-tracks")
+def list_video_pose_tracks(video_id: str) -> dict[str, object]:
+    if runtime.catalog is None:
+        return {
+            "video_id": video_id,
+            "pose_tracks": read_pose_tracks(runtime.pose_tracks_path, video_id),
+            "source": "local",
+        }
+    tracks = runtime.catalog.list_pose_tracks(video_id)
+    remote = isinstance(runtime.catalog, ZetarisCatalog) and runtime.catalog.available is True
+    return {
+        "video_id": video_id,
+        "pose_tracks": tracks,
+        "source": "zetaris" if remote else "local",
     }
 
 
