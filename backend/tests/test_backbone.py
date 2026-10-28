@@ -418,6 +418,26 @@ class GroqIntegrationTests(unittest.TestCase):
         self.assertIsNone(response["sequence"][0]["pose_url"])
         self.assertEqual(response["sequence"][0]["reference"]["video_id"], "apple.mp4")
 
+    def test_missing_catalog_returns_entered_words_instead_of_failing(self) -> None:
+        with patch.object(api.runtime, "catalog", None), patch.dict(
+            os.environ,
+            {"LLM_PROVIDER": "groq"},
+            clear=True,
+        ):
+            response = asyncio.run(
+                api.translate_text(api.TranslationRequest(text="Hello there"))
+            )
+
+        self.assertEqual(response["status"], "draft")
+        self.assertEqual(response["translation_source"], "local_word_lookup")
+        self.assertEqual(response["glosses"], ["HELLO", "THERE"])
+        self.assertEqual(response["unsupported_glosses"], ["HELLO", "THERE"])
+        self.assertFalse(response["sequence"][0]["supported"])
+        self.assertIsNone(response["sequence"][0]["reference"])
+        self.assertTrue(
+            any("ASL_DATASET_ROOT" in warning for warning in response["warnings"])
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

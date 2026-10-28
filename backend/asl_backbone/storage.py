@@ -54,7 +54,8 @@ class Store:
                     license_url TEXT NOT NULL,
                     consent_confirmed INTEGER NOT NULL,
                     review_status TEXT NOT NULL,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    source_deleted_at TEXT
                 );
                 CREATE TABLE IF NOT EXISTS dataset_versions (
                     id TEXT PRIMARY KEY,
@@ -62,7 +63,37 @@ class Store:
                     manifest_sha256 TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS pose_extraction_jobs (
+                    id TEXT PRIMARY KEY,
+                    asset_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    pose_path TEXT,
+                    error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS training_runs (
+                    id TEXT PRIMARY KEY,
+                    dataset_version_id TEXT NOT NULL,
+                    manifest_sha256 TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    output_path TEXT,
+                    checkpoint_sha256 TEXT,
+                    error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
+            )
+            self._migrate(connection)
+
+    def _migrate(self, connection: sqlite3.Connection) -> None:
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(dataset_assets)")
+        }
+        if "source_deleted_at" not in columns:
+            connection.execute(
+                "ALTER TABLE dataset_assets ADD COLUMN source_deleted_at TEXT"
             )
 
     @contextmanager
@@ -258,7 +289,8 @@ class Store:
             rows = connection.execute(
                 """
                 SELECT id, participant_id, filename, sha256, gloss, license_name,
-                       license_url, consent_confirmed, review_status, created_at
+                       license_url, consent_confirmed, review_status, created_at,
+                       source_deleted_at
                 FROM dataset_assets ORDER BY created_at, id
                 """
             ).fetchall()
@@ -343,3 +375,203 @@ class Store:
             "created_at": row["created_at"],
             "manifest": json.loads(row["manifest_json"]),
         }
+
+    def get_dataset_asset(self, asset_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM dataset_assets WHERE id = ?", (asset_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def enqueue_pose_job(self, asset_id: str) -> dict[str, Any]:
+        job_id = str(uuid.uuid4())
+        created_at = _now()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                """
+                SELECT id FROM pose_extraction_jobs
+                WHERE asset_id = ? AND status IN ('queued', 'processing')
+                """,
+                (asset_id,),
+            ).fetchone()
+            if existing is not None:
+                raise ValueError("A pose extraction job is already active for this asset.")
+            connection.execute(
+                """
+                INSERT INTO pose_extraction_jobs
+                    (id, asset_id, status, created_at, updated_at)
+                VALUES (?, ?, 'queued', ?, ?)
+                """,
+                (job_id, asset_id, created_at, created_at),
+            )
+        job = self.get_pose_job(job_id)
+        if job is None:
+            raise RuntimeError("Pose extraction job was inserted but could not be read back.")
+        return job
+
+    def get_pose_job(self, job_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM pose_extraction_jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def claim_next_pose_job(self) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT id FROM pose_extraction_jobs
+                WHERE status = 'queued'
+                ORDER BY created_at, id LIMIT 1
+                """
+            ).fetchone()
+            if row is None:
+                return None
+            cursor = connection.execute(
+                """
+                UPDATE pose_extraction_jobs SET status = 'processing', updated_at = ?
+                WHERE id = ? AND status = 'queued'
+                """,
+                (_now(), row["id"]),
+            )
+            if cursor.rowcount != 1:
+                return None
+            claimed = connection.execute(
+                "SELECT * FROM pose_extraction_jobs WHERE id = ?", (row["id"],)
+            ).fetchone()
+            return dict(claimed)
+
+    def recover_interrupted_pose_jobs(self) -> int:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE pose_extraction_jobs SET status = 'queued', updated_at = ?
+                WHERE status = 'processing'
+                """,
+                (_now(),),
+            )
+        return cursor.rowcount
+
+    def finish_pose_job(
+        self,
+        job_id: str,
+        status: str,
+        *,
+        pose_path: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        if status not in {"succeeded", "needs_review", "failed"}:
+            raise ValueError("Pose extraction jobs can only finish as succeeded, needs_review, or failed.")
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE pose_extraction_jobs
+                SET status = ?, pose_path = ?, error = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (status, pose_path, error, _now(), job_id),
+            )
+
+    def expire_requests(self, cutoff_iso: str) -> int:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id FROM signing_requests
+                WHERE created_at < ? AND status != 'processing'
+                """,
+                (cutoff_iso,),
+            ).fetchall()
+        removed = 0
+        for row in rows:
+            try:
+                if self.delete_request(row["id"]):
+                    removed += 1
+            except ValueError:
+                continue
+        return removed
+
+    def expire_source_videos(self, cutoff_iso: str, raw_root: Path) -> int:
+        raw_root = raw_root.resolve()
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, storage_path FROM dataset_assets
+                WHERE created_at < ? AND source_deleted_at IS NULL
+                  AND id NOT IN (
+                      SELECT asset_id FROM pose_extraction_jobs
+                      WHERE status IN ('queued', 'processing')
+                  )
+                """,
+                (cutoff_iso,),
+            ).fetchall()
+        purged = 0
+        deleted_at = _now()
+        for row in rows:
+            video_path = Path(row["storage_path"]).resolve()
+            if video_path.parent != raw_root:
+                continue
+            video_path.unlink(missing_ok=True)
+            with self._connect() as connection:
+                cursor = connection.execute(
+                    """
+                    UPDATE dataset_assets SET source_deleted_at = ?
+                    WHERE id = ? AND source_deleted_at IS NULL
+                    """,
+                    (deleted_at, row["id"]),
+                )
+                if cursor.rowcount:
+                    purged += 1
+        return purged
+
+    def create_training_run(
+        self, *, dataset_version_id: str, manifest_sha256: str, output_path: str
+    ) -> str:
+        run_id = str(uuid.uuid4())
+        created_at = _now()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO training_runs (
+                    id, dataset_version_id, manifest_sha256, status, output_path,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, 'running', ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    dataset_version_id,
+                    manifest_sha256,
+                    output_path,
+                    created_at,
+                    created_at,
+                ),
+            )
+        return run_id
+
+    def finish_training_run(
+        self,
+        run_id: str,
+        status: str,
+        *,
+        checkpoint_sha256: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        if status not in {"completed", "failed"}:
+            raise ValueError("Training runs can only finish as completed or failed.")
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE training_runs
+                SET status = ?, checkpoint_sha256 = ?, error = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (status, checkpoint_sha256, error, _now(), run_id),
+            )
+
+    def get_training_run(self, run_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM training_runs WHERE id = ?", (run_id,)
+            ).fetchone()
+        return dict(row) if row else None

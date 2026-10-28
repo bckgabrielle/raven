@@ -4,7 +4,9 @@ This service provides persistent signing-request status/results, an SQLite-backe
 single-process worker, feedback intake, and an authenticated local dataset
 intake/review flow. Its existing ML model remains an **isolated-sign video
 classifier**. It does not translate English sentences into grammatical ASL or
-produce avatar motion.
+generate new signing motion. When a local pose track already exists, a signing
+result can include that isolated-sign track. Approved dataset videos can be
+queued for landmark extraction.
 
 ## Run
 
@@ -29,6 +31,25 @@ directory is `backend/.raven-state/`. Keep it outside source control and back it
 up appropriately; uploaded raw videos are stored under `raw-videos/`.
 Do not commit credentials, ASL-Citizen files, pose tracks, or model checkpoints;
 the root `.gitignore` excludes environment files and common dataset/model formats.
+
+Set `ASL_RETENTION_DAYS` to a positive number of days to delete old signing
+requests and raw source videos. Dataset version manifests are left unchanged.
+Leave it unset to keep data until an administrator deletes it.
+
+`POST /v1/requests/file` accepts one UTF-8 `.txt` file, up to 64 KB and 1000
+characters, and queues it like typed text. `POST /v1/admin/pose-jobs` queues
+landmark extraction for one approved, consented dataset video. The worker
+reports `succeeded`, `needs_review`, or `failed`.
+
+Training requires the dataset version the run used:
+
+```powershell
+python -m asl_backbone.train --dataset-root C:\asl-citizen --dataset-version dataset-abc123 --state-dir C:\raven-data
+```
+
+Training stops when that version is missing or when a training video's SHA-256
+is not in the manifest. The checkpoint records the version id, manifest hash,
+and matched asset ids.
 
 ## Optional gloss drafting and catalog integrations
 
@@ -70,6 +91,9 @@ multi-instance coordination.
 ## API outline
 
 - `POST /v1/requests` accepts `{ "text": "..." }` and returns a request ID.
+- `POST /v1/requests/file` accepts one UTF-8 `.txt` upload and queues it the same way.
+- `POST /v1/admin/pose-jobs` queues landmark extraction for an approved consented video.
+- `GET /v1/admin/pose-jobs/{job_id}` returns `succeeded`, `needs_review`, or `failed`.
 - `GET /v1/requests/{request_id}` polls request status and result ID.
 - `GET /v1/results/{result_id}` returns the versioned reference-only result.
 - `GET /v1/provider-status` reports selected provider and configuration state
@@ -91,17 +115,20 @@ does not verify that consent or licensing claims are legally valid.
 ## Current limits before production/translation
 
 - Request jobs currently resolve only exact, single-gloss reference matches.
-  A match is one reference clip, not a sentence translation.
-- There is no landmark extraction/annotation ETL, training-set builder, or
-  training-run-to-dataset-manifest linkage yet.
+  A match is one reference clip, not a sentence translation. If a local pose
+  track exists, the result includes that isolated-sign track and labels it as
+  recorded pose data rather than generated sentence motion.
+- Landmark extraction can be queued for an approved intake video. It does not
+  build a training set, normalize a full corpus, or rewrite dataset manifests.
 - No sentence-level ASL model, curated phrase library, motion generator, facial
   grammar track, or avatar-rig integration is included.
-- Model checkpoint publication/rollback, training-run lineage to dataset
-  versions, model-output caching, and production metrics/alerting are not
-  implemented.
+- Model checkpoint publication/rollback, model-output caching, and production
+  metrics/alerting are not implemented. A training run must name an existing
+  dataset version, and that id is stored on the run and the checkpoint.
 - The local admin token is a shared secret. There are no user accounts,
   per-user authorization, production secret management, or distributed object
-  storage, or automatic retention schedule. Avoid exposing this MVP to
+  storage. Optional `ASL_RETENTION_DAYS` deletes old requests and raw source
+  videos without rewriting dataset manifests. Avoid exposing this MVP to
   untrusted networks or storing sensitive real signer data in it without a
   security/privacy review.
 - Dataset version manifests are immutable audit snapshots; deleting an active
