@@ -73,7 +73,9 @@ The backend currently supports durable local signing-request status/results,
 an SQLite-backed queue worker, exact single-gloss reference lookup, isolated
 video-sign recognition, feedback intake, and authenticated local dataset
 intake/review with consent/licence metadata and hashed manifests. It does not
-yet translate English sentences, generate motion, or run landmark ETL. See
+yet translate English sentences or generate signing motion. A signing result
+can attach an existing isolated-sign pose track, and approved intake videos
+can be queued for landmark extraction. See
 [backend/README.md](./backend/README.md) for setup, API routes, and limitations.
 
 Gloss drafting can optionally use Groq or a local Meterless Nightshift

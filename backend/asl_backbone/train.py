@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import random
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from torch.utils.data import DataLoader
 
 from .data import SignVideoDataset, read_split
 from .model import TemporalSignClassifier
+from .storage import Store
+from .training_data import bind_training_videos, sha256_file
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,7 +29,40 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, help="Limit rows per split for a quick smoke run.")
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    parser.add_argument(
+        "--dataset-version",
+        required=True,
+        help="Exact dataset version id. Training refuses to start when this manifest is missing or does not cover the videos.",
+    )
+    parser.add_argument(
+        "--state-dir",
+        type=Path,
+        help="Directory containing raven.sqlite3. Defaults to ASL_STATE_DIR or backend/.raven-state.",
+    )
     return parser.parse_args()
+
+
+def state_directory(explicit: Path | None) -> Path:
+    if explicit is not None:
+        return explicit.expanduser().resolve()
+    setting = os.getenv("ASL_STATE_DIR")
+    if setting:
+        return Path(setting).expanduser().resolve()
+    return Path(__file__).resolve().parents[1] / ".raven-state"
+
+
+def training_video_paths(video_dir: Path, records: list) -> list[Path]:
+    video_root = video_dir.resolve()
+    paths: list[Path] = []
+    seen: set[Path] = set()
+    for record in records:
+        path = (video_root / record.video_file).resolve()
+        if path.parent != video_root:
+            raise ValueError(f"Training video escapes the dataset videos directory: {record.video_file}")
+        if path not in seen:
+            seen.add(path)
+            paths.append(path)
+    return paths
 
 
 def choose_device(requested: str) -> torch.device:
@@ -107,6 +143,52 @@ def main() -> None:
     if not val_records:
         raise ValueError("No validation clips overlap the training vocabulary.")
 
+    store = Store(state_directory(args.state_dir) / "raven.sqlite3")
+    version = store.get_dataset_version(args.dataset_version)
+    if version is None:
+        raise ValueError(
+            f"Dataset version not found: {args.dataset_version}. "
+            "Create a dataset version before training."
+        )
+    video_paths = training_video_paths(video_dir, [*train_records, *val_records])
+    run_id = store.create_training_run(
+        dataset_version_id=version["id"],
+        manifest_sha256=version["manifest_sha256"],
+        output_path=str(args.output),
+    )
+    try:
+        binding = bind_training_videos(store, version["id"], video_paths)
+        _train_bound_run(
+            args,
+            device,
+            train_records,
+            val_records,
+            classes,
+            label_to_id,
+            video_dir,
+            binding,
+        )
+        checkpoint_sha256 = sha256_file(args.output)
+    except Exception as error:
+        store.finish_training_run(run_id, "failed", error=str(error))
+        raise
+    store.finish_training_run(
+        run_id,
+        "completed",
+        checkpoint_sha256=checkpoint_sha256,
+    )
+
+
+def _train_bound_run(
+    args: argparse.Namespace,
+    device: torch.device,
+    train_records: list,
+    val_records: list,
+    classes: list[str],
+    label_to_id: dict[str, int],
+    video_dir: Path,
+    binding: dict,
+) -> None:
     train_data = SignVideoDataset(
         train_records, video_dir, label_to_id, args.frames, args.image_size
     )
@@ -158,6 +240,9 @@ def main() -> None:
                     "frame_count": args.frames,
                     "image_size": args.image_size,
                     "validation_top1": val_accuracy,
+                    "dataset_version_id": binding["dataset_version_id"],
+                    "manifest_sha256": binding["manifest_sha256"],
+                    "dataset_asset_ids": binding["dataset_asset_ids"],
                 },
                 args.output,
             )

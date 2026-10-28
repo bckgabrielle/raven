@@ -3,15 +3,17 @@ from __future__ import annotations
 import mimetypes
 import os
 import hashlib
+import json
 import logging
 import secrets
 import re
 import shutil
 import threading
 import tempfile
+import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
@@ -28,7 +30,7 @@ from .catalog import SignCatalog, ZetarisCatalog, read_pose_tracks
 from .data import VideoRecord, sample_video
 from .groq_service import GroqServiceError, is_configured, transcribe_audio
 from .model import TemporalSignClassifier
-from .pose_tracks import load_pose_track, pose_track_path, pose_track_quality
+from .pose_tracks import extract_video_pose, load_pose_track, pose_track_path, pose_track_quality
 from .providers import (
     ProviderError,
     ProviderSettings,
@@ -42,11 +44,18 @@ from .storage import Store
 
 logger = logging.getLogger(__name__)
 MAX_INTAKE_BYTES = 100 * 1024 * 1024
+MAX_TEXT_FILE_BYTES = 64 * 1024
+MAX_REQUEST_CHARS = 1000
 ALLOWED_VIDEO_SUFFIXES = {".mp4", ".mov", ".webm"}
+ISOLATED_POSE_WARNING = (
+    "This is a recorded isolated-sign pose track, not a grammatical sentence translation "
+    "or generated signing motion."
+)
+RETENTION_CHECK_SECONDS = 60
 
 
 class PlanRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=1000)
+    text: str = Field(min_length=1, max_length=MAX_REQUEST_CHARS)
 
 
 class FeedbackRequest(BaseModel):
@@ -58,8 +67,12 @@ class AssetReviewRequest(BaseModel):
     review_status: Literal["approved", "rejected", "pending"]
 
 
+class PoseJobRequest(BaseModel):
+    asset_id: str = Field(min_length=1, max_length=100)
+
+
 class TranslationRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=1000)
+    text: str = Field(min_length=1, max_length=MAX_REQUEST_CHARS)
 
 
 class Runtime:
@@ -78,6 +91,8 @@ class Runtime:
         self.frame_count = 16
         self.image_size = 112
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.retention_days: int | None = None
+        self.next_retention_check = 0.0
 
     def load(self) -> None:
         state_setting = os.getenv("ASL_STATE_DIR")
@@ -88,9 +103,13 @@ class Runtime:
         )
         self.state_root.mkdir(parents=True, exist_ok=True)
         self.store = Store(self.state_root / "raven.sqlite3")
+        self.retention_days = retention_days_from_env()
         recovered = self.store.recover_interrupted_requests()
         if recovered:
             logger.warning("Requeued %s interrupted signing requests", recovered)
+        recovered_jobs = self.store.recover_interrupted_pose_jobs()
+        if recovered_jobs:
+            logger.warning("Requeued %s interrupted pose extraction jobs", recovered_jobs)
 
         dataset_setting = os.getenv("ASL_DATASET_ROOT")
         checkpoint_setting = os.getenv("ASL_CHECKPOINT")
@@ -195,18 +214,56 @@ def get_store() -> Store:
     return runtime.store
 
 
+def retention_days_from_env() -> int | None:
+    raw = os.getenv("ASL_RETENTION_DAYS", "").strip()
+    if not raw:
+        return None
+    if not raw.isdigit() or int(raw) < 1:
+        raise ValueError("ASL_RETENTION_DAYS must be a positive whole number of days.")
+    return int(raw)
+
+
+def _apply_retention() -> None:
+    now = time.monotonic()
+    if now < runtime.next_retention_check:
+        return
+    runtime.next_retention_check = now + RETENTION_CHECK_SECONDS
+    if not runtime.retention_days or runtime.state_root is None:
+        return
+    cutoff = (datetime.now(UTC) - timedelta(days=runtime.retention_days)).isoformat()
+    store = get_store()
+    removed = store.expire_requests(cutoff)
+    purged = store.expire_source_videos(cutoff, runtime.state_root / "raw-videos")
+    if removed or purged:
+        logger.info(
+            "Retention removed %s signing requests and %s source videos",
+            removed,
+            purged,
+        )
+
+
 def _request_worker() -> None:
     while not runtime.worker_stop.is_set():
         try:
+            _apply_retention()
             request = get_store().claim_next_request()
         except Exception:
             logger.exception("Signing request worker failed to read the queue")
             runtime.worker_stop.wait(1)
             continue
-        if request is None:
-            runtime.worker_stop.wait(0.25)
+        if request is not None:
+            _process_signing_request(request["id"])
             continue
-        _process_signing_request(request["id"])
+        try:
+            job = get_store().claim_next_pose_job()
+        except Exception:
+            logger.exception("Pose extraction worker failed to read the queue")
+            runtime.worker_stop.wait(1)
+            continue
+        if job is not None:
+            _process_pose_job(job["id"])
+            continue
+        runtime.worker_stop.wait(0.25)
 
 
 def require_admin(x_admin_token: str | None = Header(default=None)) -> None:
@@ -270,6 +327,24 @@ def _reference_sequence(text: str) -> tuple[list[dict[str, object]], str | None]
     )
 
 
+def _result_warning(is_draft: bool, has_motion: bool) -> str:
+    if has_motion and is_draft:
+        return (
+            "This AI gloss draft is unreviewed and may be inaccurate. "
+            + ISOLATED_POSE_WARNING
+        )
+    if has_motion:
+        return ISOLATED_POSE_WARNING
+    if is_draft:
+        return (
+            "This AI gloss draft is unreviewed and may be inaccurate; it is not a grammatical "
+            "sentence translation or avatar motion track."
+        )
+    return (
+        "This is one recorded example, not a grammatical sentence translation or avatar motion track."
+    )
+
+
 def _make_reference_result(request: dict[str, Any]) -> dict[str, Any]:
     sequence, draft_provider = _reference_sequence(request["normalized_text"])
     if not sequence:
@@ -295,6 +370,7 @@ def _make_reference_result(request: dict[str, Any]) -> dict[str, Any]:
         }
 
     is_draft = draft_provider is not None
+    motion_data, motion_version = _isolated_motion(sequence)
     return {
         "schema_version": "1.0",
         "request_id": request["id"],
@@ -302,19 +378,68 @@ def _make_reference_result(request: dict[str, Any]) -> dict[str, Any]:
         "status": "unreviewed_draft" if is_draft else "reference_only",
         "supported": True,
         "plan_version": "gloss-draft-v1" if is_draft else "reference-plan-v1",
-        "motion_data_version": None,
+        "motion_data_version": motion_version,
         "model_version": runtime.model_version,
         "sequence": sequence,
-        "motion_data": None,
+        "motion_data": motion_data,
         "gloss_provider": draft_provider or "local_exact_lookup",
         "draft_status": "unreviewed" if is_draft else "not_created",
-        "warning": (
-            "This AI gloss draft is unreviewed and may be inaccurate; it is not a grammatical "
-            "sentence translation or avatar motion track."
-            if is_draft
-            else "This is one recorded example, not a grammatical sentence translation or avatar motion track."
-        ),
+        "warning": _result_warning(is_draft, motion_data is not None),
     }
+
+
+def _process_pose_job(job_id: str) -> None:
+    store = get_store()
+    job = store.get_pose_job(job_id)
+    if job is None:
+        logger.error("Queued pose extraction job %s disappeared before processing", job_id)
+        return
+    asset = store.get_dataset_asset(job["asset_id"])
+    if (
+        asset is None
+        or not asset["consent_confirmed"]
+        or asset["review_status"] != "approved"
+        or asset["source_deleted_at"]
+    ):
+        store.finish_pose_job(
+            job_id,
+            "failed",
+            error="Pose extraction requires an approved consented source video that is still stored.",
+        )
+        return
+    if runtime.state_root is None:
+        store.finish_pose_job(job_id, "failed", error="Backend storage is not initialized.")
+        return
+    raw_root = (runtime.state_root / "raw-videos").resolve()
+    video_path = Path(asset["storage_path"]).resolve()
+    if video_path.parent != raw_root or not video_path.is_file():
+        store.finish_pose_job(job_id, "failed", error="Stored source video is missing or outside raw-video storage.")
+        return
+    try:
+        track = extract_video_pose(video_path, gloss=asset["gloss"], target_fps=15.0)
+        track["video_id"] = asset["filename"]
+        output_path = runtime.state_root / "derived" / "pose_tracks" / f"{asset['id']}.json"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = output_path.with_suffix(".json.tmp")
+        with temporary_path.open("w", encoding="utf-8") as file:
+            json.dump(track, file, separators=(",", ":"), allow_nan=False)
+        temporary_path.replace(output_path)
+        if load_pose_track(output_path) is None:
+            store.finish_pose_job(
+                job_id,
+                "needs_review",
+                error="Extracted landmarks are not playable and need review.",
+            )
+            return
+        store.finish_pose_job(job_id, "succeeded", pose_path=str(output_path))
+        logger.info("Pose extraction job %s wrote %s", job_id, output_path)
+    except ValueError as error:
+        message = str(error)
+        status = "needs_review" if "usable body and hand landmarks" in message else "failed"
+        store.finish_pose_job(job_id, status, error=message)
+    except Exception as error:
+        logger.exception("Pose extraction job %s failed", job_id)
+        store.finish_pose_job(job_id, "failed", error=str(error))
 
 
 def _process_signing_request(request_id: str) -> None:
@@ -348,6 +473,7 @@ def health() -> dict[str, object]:
         "alphabet_dataset_loaded": bool(runtime.alphabet_samples),
         "alphabet_letters_available": len(runtime.alphabet_samples),
         "groq_configured": is_configured(),
+        "retention_days": runtime.retention_days,
     }
 
 
@@ -378,11 +504,41 @@ def create_signing_request(request: PlanRequest) -> dict[str, object]:
     if not normalized:
         raise HTTPException(status_code=422, detail="Text must contain non-whitespace characters.")
     created = get_store().create_request(request.text, normalized)
+    return _accepted_request(created)
+
+
+def _accepted_request(created: dict[str, Any]) -> dict[str, object]:
     return {
         "request_id": created["id"],
         "status": created["status"],
         "status_url": f"/v1/requests/{created['id']}",
     }
+
+
+@app.post("/v1/requests/file", status_code=202)
+async def create_signing_request_from_file(file: UploadFile = File(...)) -> dict[str, object]:
+    filename = Path(file.filename or "").name
+    try:
+        if Path(filename).suffix.lower() != ".txt":
+            raise HTTPException(status_code=415, detail="Upload a .txt file.")
+        raw = await file.read(MAX_TEXT_FILE_BYTES + 1)
+        if len(raw) > MAX_TEXT_FILE_BYTES:
+            raise HTTPException(status_code=413, detail="Text uploads are limited to 64 KB.")
+        if b"\x00" in raw:
+            raise HTTPException(status_code=422, detail="Text file must be UTF-8 without null bytes.")
+        try:
+            text = raw.decode("utf-8-sig")
+        except UnicodeDecodeError as error:
+            raise HTTPException(status_code=422, detail="Text file must be UTF-8.") from error
+        if len(text) > MAX_REQUEST_CHARS:
+            raise HTTPException(status_code=422, detail="Text must be 1000 characters or fewer.")
+        normalized = _normalize_text(text)
+        if not normalized:
+            raise HTTPException(status_code=422, detail="Text must contain non-whitespace characters.")
+        created = get_store().create_request(text, normalized)
+        return _accepted_request(created)
+    finally:
+        await file.close()
 
 
 @app.get("/v1/requests/{request_id}")
@@ -484,23 +640,18 @@ def create_reference_plan(request: PlanRequest) -> dict[str, object]:
             "warning": "Only exact single-gloss reference lookup is available; this is not English-to-ASL translation.",
         }
 
-    for item in sequence:
-        item["pose_url"] = _pose_url_for_gloss(str(item["gloss"]))
-
+    motion_data, motion_version = _isolated_motion(sequence)
+    is_draft = draft_provider is not None
     return {
-        "status": "unreviewed_draft" if draft_provider else "reference_only",
+        "status": "unreviewed_draft" if is_draft else "reference_only",
         "supported": True,
         "source_text": request.text,
         "sequence": sequence,
-        "motion_data": None,
+        "motion_data": motion_data,
+        "motion_data_version": motion_version,
         "gloss_provider": draft_provider or "local_exact_lookup",
-        "draft_status": "unreviewed" if draft_provider else "not_created",
-        "warning": (
-            "This AI gloss draft is unreviewed and may be inaccurate; it is not a grammatical "
-            "sentence translation or avatar motion track."
-            if draft_provider
-            else "This is one recorded example, not a grammatical sentence translation or avatar motion track."
-        ),
+        "draft_status": "unreviewed" if is_draft else "not_created",
+        "warning": _result_warning(is_draft, motion_data is not None),
     }
 
 
@@ -557,11 +708,65 @@ def _pose_url_for_gloss(gloss: str) -> str | None:
     return f"/v1/poses/{quote(match[0].gloss, safe='')}" if match else None
 
 
+def _isolated_motion(
+    sequence: list[dict[str, object]],
+) -> tuple[dict[str, Any] | None, str | None]:
+    tracks: list[dict[str, Any]] = []
+    for item in sequence:
+        gloss = str(item["gloss"])
+        match = _best_pose_track(gloss)
+        if match is None:
+            item["pose_url"] = None
+            continue
+        record, track = match
+        pose_url = f"/v1/poses/{quote(record.gloss, safe='')}"
+        item["pose_url"] = pose_url
+        tracks.append(
+            {
+                "index": item.get("index", len(tracks)),
+                "gloss": record.gloss,
+                "video_id": record.video_file,
+                "pose_url": pose_url,
+                "fps": track["fps"],
+                "frame_count": len(track["frames"]),
+                "track": track,
+            }
+        )
+    if not tracks:
+        return None, None
+    version_material = json.dumps(
+        [
+            {
+                "video_id": track["video_id"],
+                "fps": track["fps"],
+                "frames": track["track"]["frames"],
+            }
+            for track in tracks
+        ],
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    version = "isolated-pose-v1:" + hashlib.sha256(version_material.encode("utf-8")).hexdigest()[:16]
+    return (
+        {
+            "schema_version": "isolated-pose-v1",
+            "isolated_sign": True,
+            "sentence_motion": False,
+            "tracks": tracks,
+        },
+        version,
+    )
+
+
+def _word_tokens(text: str) -> list[str]:
+    return re.findall(r"[A-Za-z0-9]+(?:['-][A-Za-z0-9]+)*", text)
+
+
 def _local_word_lookup(text: str) -> tuple[list[str], list[str]]:
-    tokens = re.findall(r"[A-Za-z0-9]+(?:['-][A-Za-z0-9]+)*", text)
     glosses: list[str] = []
     unsupported: list[str] = []
-    for token in tokens:
+    for token in _word_tokens(text):
         reference = _reference_for_gloss(token)
         if reference is None:
             unsupported.append(token)
@@ -570,14 +775,13 @@ def _local_word_lookup(text: str) -> tuple[list[str], list[str]]:
     return glosses, unsupported
 
 
+def _ungrounded_word_list(text: str) -> tuple[list[str], list[str]]:
+    glosses = [token.upper() for token in _word_tokens(text)]
+    return glosses, list(glosses)
+
+
 @app.post("/v1/translate")
 async def translate_text(request: TranslationRequest) -> dict[str, object]:
-    if runtime.catalog is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Set ASL_DATASET_ROOT to enable the local gloss/reference fallback.",
-        )
-
     warnings = [
         "This is an unreviewed ASL gloss draft, not an authoritative translation.",
         "Dataset examples are isolated signs; avatar playback is available only for locally extracted pose tracks and does not validate sentence grammar.",
@@ -585,15 +789,32 @@ async def translate_text(request: TranslationRequest) -> dict[str, object]:
     translation_source = "local_word_lookup"
     model_version = "local-word-lookup-v1"
     local_unsupported: list[str] | None = None
+    provider_error: ProviderError | ValueError | None = None
     try:
         settings = ProviderSettings.from_env()
         proposed_glosses = draft_glosses(request.text).glosses
         translation_source = f"{settings.provider}_unreviewed"
         model_version = settings.model
     except (ProviderError, ValueError) as error:
+        provider_error = error
+
+    if provider_error is not None and runtime.catalog is None:
+        proposed_glosses, local_unsupported = _ungrounded_word_list(request.text)
+        warnings.append(
+            "Gloss drafting is unavailable "
+            f"({provider_error}), and no sign catalog is loaded. "
+            "These are the words you entered, not ASL glosses or reference clips. "
+            "Set ASL_DATASET_ROOT to match words to recorded signs."
+        )
+    elif provider_error is not None:
         proposed_glosses, local_unsupported = _local_word_lookup(request.text)
         warnings.append(
-            f"Gloss drafting was unavailable ({error}); local word lookup is not translation."
+            f"Gloss drafting was unavailable ({provider_error}); local word lookup is not translation."
+        )
+    elif runtime.catalog is None:
+        warnings.append(
+            "No sign catalog is loaded, so these glosses have no reference clips. "
+            "Set ASL_DATASET_ROOT to enable local reference lookup."
         )
 
     sequence = []
@@ -826,6 +1047,54 @@ def get_dataset_version(version_id: str) -> dict[str, Any]:
     if version is None:
         raise HTTPException(status_code=404, detail="Dataset version not found.")
     return version
+
+
+def _pose_job_response(job: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "job_id": job["id"],
+        "asset_id": job["asset_id"],
+        "status": job["status"],
+        "error": job["error"],
+        "pose_ready": job["status"] == "succeeded" and bool(job["pose_path"]),
+        "created_at": job["created_at"],
+        "updated_at": job["updated_at"],
+        "status_url": f"/v1/admin/pose-jobs/{job['id']}",
+    }
+
+
+@app.post(
+    "/v1/admin/pose-jobs",
+    status_code=202,
+    dependencies=[Depends(require_admin)],
+)
+def create_pose_job(request: PoseJobRequest) -> dict[str, Any]:
+    store = get_store()
+    asset = store.get_dataset_asset(request.asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Dataset asset not found.")
+    if not asset["consent_confirmed"] or asset["review_status"] != "approved":
+        raise HTTPException(
+            status_code=409,
+            detail="Pose extraction requires an approved asset with recorded consent.",
+        )
+    if asset["source_deleted_at"]:
+        raise HTTPException(status_code=409, detail="Source video is no longer stored.")
+    try:
+        job = store.enqueue_pose_job(asset["id"])
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    return _pose_job_response(job)
+
+
+@app.get(
+    "/v1/admin/pose-jobs/{job_id}",
+    dependencies=[Depends(require_admin)],
+)
+def get_pose_job(job_id: str) -> dict[str, Any]:
+    job = get_store().get_pose_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Pose extraction job not found.")
+    return _pose_job_response(job)
 
 
 @app.post("/v1/recognize")
